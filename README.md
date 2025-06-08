@@ -9,7 +9,7 @@ Ansible Secrets consists of three security components and relies on a specific d
 ### Directory Definitions
 
 - Application project directories contain the Bash and Python scripts to protect. Those scripts will consume the passwords at runtime but will never contain them.
-- Ansible Deployment Project (e.g., `/opt/myapp_ansible_config`). This is a self-contained administrative toolkitused **only** for the setup and maintenance of the secrets. It contains the Ansible playbook, the vault, and thesource GPG-encrypted files. Your application scripts have no knowledge of, and will never interact with, this directory.
+- Ansible Deployment Project (e.g., `/opt/myapp_ansible_config`). This is a self-contained administrative toolkit used **only** for the setup and maintenance of the secrets. It contains the Ansible playbook, the vault, and the source GPG-encrypted files. Your application scripts have no knowledge of, and will never interact with, this directory.
 - Runtime Secrets Directory (e.g., `/opt/credential_store`).This is the secure, permissions-restricted location on the server where the Ansible playbook places the necessaryfiles for runtime decryption. This is the **single point of interaction** for the application scripts when they need a password.
 
 ### Security Components
@@ -20,7 +20,7 @@ This component provides confidentiality for your application passwords. Each pas
 
 #### Ansible Vault
 
-This component protects the GPG passphrase. The passphrase--which is the key to unlock all the application passwords--isstored in an encrypted Ansible Vault file that resides within the **Ansible Deployment Project** directory.Access to this vault is controlled by a separate Vault password known only to the administrator.
+This component protects the GPG passphrase. The passphrase--which is the key to unlock all the application passwords--is stored in an encrypted Ansible Vault file that resides within the **Ansible Deployment Project** directory.Access to this vault is controlled by a separate Vault password known only to the administrator.
 
 #### Linux Permissions
 
