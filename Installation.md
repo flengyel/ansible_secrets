@@ -57,7 +57,7 @@ This isolates your Ansible installation.
 ```bash
 # Create and take ownership of the Ansible project directory
 sudo mkdir -p /opt/ansible_secrets
-sudo chown flengyel:flengyel /opt/ansible_secrets
+sudo chown 'flengyel:domain users' /opt/ansible_secrets
 cd /opt/ansible_secrets
 
 # Create a Python virtual environment inside the project directory
@@ -88,7 +88,8 @@ mkdir -p files
 cd files
 
 # Create the plaintext password files
-printf 'Ldap&DmP@sswOrd!2025' > ldap_dm_pswd.txt
+printf 'Green&DmP@swd!2025' > green_dm_pswd.txt
+printf 'Yellow&DmP@swd!2025' > yellow_dm_pswd.txt
 printf 'LdapR0nlyP@sswOrd' > ldap_ro_pswd.txt
 printf 'S3cureOracle!P@ss' > oracle_db_pswd.txt
 
@@ -107,7 +108,7 @@ shred --remove *.txt
 cd ..
 ```
 
-You now have `ldap_dm_pswd.txt.gpg`, `ldap_ro_pswd.txt.gpg`, and `oracle_db_pswd.txt.gpg` in your `files/` subdirectory.
+You now have `green_dm_pswd.txt.gpg`, `yellow_dm_pswd.txt.gpg`, `ldap_ro_pswd.txt.gpg`, and `oracle_db_pswd.txt.gpg` in your `files/` subdirectory.
 
 ## 2.2. Prepare the Ansible Vault
 
@@ -170,6 +171,7 @@ Create `/opt/ansible_secrets/deploy_secrets.yml`:
     encrypted_secret_files:
       - green_dm_pswd.txt.gpg
       - yellow_dm_pswd.txt.gpg
+      - ldap_ro_pswd.txt.gpg
       - oracle_db_pswd.txt.gpg
   vars_files:
     - group_vars/all/vault.yml
@@ -240,7 +242,7 @@ source venv/bin/activate
 ansible-playbook deploy_secrets.yml
 ```
 
-4.2. Verify the Deployment
+### 4.2. Verify the Deployment
 
 After the playbook runs successfully, check the deployed secrets directory.
 
@@ -371,19 +373,56 @@ sudo chmod 0640 /usr/local/lib/ansible_secret_helpers/secret_retriever.py # Owne
 
 ```python
 #!/usr/bin/env python3
-# Assuming /usr/local/lib/ansible_secret_helpers is in PYTHONPATH or this script is in /usr/local/lib/ansible_secret_helpers
-import secret_retriever
 import sys
+import os
+
+# --- Start of required modification ---
+# Define the path to the helper library.
+HELPER_LIB_PATH = "/usr/local/lib/ansible_secret_helpers"
+
+# Add the path to the system path list so Python can find the module.
+# This makes the script work reliably from anywhere (including cron).
+if HELPER_LIB_PATH not in sys.path:
+    sys.path.append(HELPER_LIB_PATH)
+
+try:
+    # Now that the path is set, the import will succeed.
+    import secret_retriever
+except ImportError:
+    print(f"CRITICAL ERROR: Could not import 'secret_retriever'.", file=sys.stderr)
+    print(f"Ensure '{HELPER_LIB_PATH}' exists and is readable.", file=sys.stderr)
+    sys.exit(1)
+# --- End of required modification ---
+
 
 ldap_dm_pass = None
 try:
+    # The rest of your script logic remains the same.
     ldap_dm_pass = secret_retriever.get_password("ldap_dm")
     print(f"Successfully retrieved LDAP DM password of length {len(ldap_dm_pass)}")
     # Now use ldap_dm_pass to connect to LDAP
     # ...
+
 except Exception as e:
     print(f"Error: {e}", file=sys.stderr)
+
 finally:
     # Clear the variable reference
     ldap_dm_pass = None
+    print("Execution finished. Secret cleared from memory.")
+```
+
+## Section 6: App script ownership and permissions
+
+This is the recommended ownership and permission model for production Python and bash scripts:
+
+- Owner: service_account
+- Group: appsecretaccess
+- Permissions: 0750 (-rwxr-x---)
+
+Here are the ownership and permission mode commands for scripts used with Ansible Secrets. The script in this example is `getemplid.sh`, however, the commands below apply to Python scripts as well.
+
+```bash
+sudo chown service_account:appsecretaccess getemplid.sh
+sudo chmod 0750 getemplid.sh
 ```
