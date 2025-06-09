@@ -1,16 +1,14 @@
 # Example cronjob
 
-1.  **User Context:** The `crontab -l` output shows that these jobs run as user, `flengyel`. For the system to work, the `flengyel` user must be a member of the `appsecretaccess` group and must have logged in at least once since being added to that group.
-2.  **Execution Flow:** The execution flow is `cronjob -> wrapper_script.sh -> python_script.py`. The wrapper script sets up the environment (`LD_LIBRARY_PATH`, virtual environment activation) before executing the main logic.
-3.  **The Target:** The `cunyfirst.py` script, with its hardcoded line `constr = 'oracle+cx_oracle://flengyel:this is a big secret' + datasrc`, is the part we will now secure.
+1. **User Context:** The `crontab -l` output shows that these jobs run as user, `flengyel`. For the system to work, the `flengyel` user must be a member of the `appsecretaccess` group and must have logged in at least once since being added to that group.
+2. **Execution Flow:** The execution flow is `cronjob -> wrapper_script.sh -> python_script.py`. The wrapper script sets up the environment (`LD_LIBRARY_PATH`, virtual environment activation) before executing the main logic.
+3. **The Target:** The `cunyfirst.py` script, with its hardcoded line `constr = 'oracle+cx_oracle://flengyel:this is a big secret' + datasrc`, is the part we will now secure.
 
 The wrapper script, `dailyoim_venv.sh`, needs **no changes**. Its job is to set up the environment, which it already does correctly.
 
-
-
 ## **How to Modify `cunyfirst.py` to Use the Credential Store**
 
-we will modify `cunyfirst.py` to call the reusable Python helper module (`secret_retriever.py`) to fetch the Oracle password at runtime.
+We will modify `cunyfirst.py` to call the reusable Python helper module (`secret_retriever.py`) to fetch the Oracle password at runtime.
 
 Here is the "before and after" of your `cunyfirst.py` script.
 
@@ -25,7 +23,7 @@ datasrc = cx.makedsn(dbhost, dbport,service_name = dbsid)
 # This line contains the hardcoded secret password
 constr  = 'oracle+cx_oracle://flengyel:this is a big secret' + datasrc
 
-	engine = sqlalchemy.create_engine(constr,  max_identifier_length=128)
+engine = sqlalchemy.create_engine(constr,  max_identifier_length=128)
 # ... rest of script ...
  ```
 
@@ -33,9 +31,8 @@ constr  = 'oracle+cx_oracle://flengyel:this is a big secret' + datasrc
 
 This version dynamically fetches the password from the credential store.
 
- ```python
+```python
 #!/usr/bin/env python3
-# NOTE: Using python3 is recommended on RHEL 9. The f-string formatting requires Python 3.6+.
 
 import csv
 import sqlalchemy
@@ -54,8 +51,8 @@ try:
     import secret_retriever
     except ImportError:
 # A clear error message is crucial for debugging cronjobs
-	print(f"CRITICAL ERROR: Could not import secret_retriever from {HELPER_LIB_PATH}. Check path and permissions.", file=sys.stderr)
-	sys.exit(1)
+        print(f"CRITICAL ERROR: Could not import secret_retriever from {HELPER_LIB_PATH}. Check path and permissions.", file=sys.stderr)
+        sys.exit(1)
 
 try:
 # Retrieve the 'oracle_db' password using the helper function
@@ -103,16 +100,14 @@ engine.dispose()
 ```
 
 ## **Summary of How It Works with Your Cronjob**
-   
-1.  At 1:00 AM, `cron` runs `/ims/cunyfirst/dailyoim_venv.sh` as the user `flengyel`.
-2.  The wrapper script (`dailyoim_venv.sh`) sets `LD_LIBRARY_PATH`, changes directory, and activates the Python virtual environment.
-3.  It then executes the **modified** `cunyfirst.py` script.
-4.  The Python script, now running as `flengyel` (who is a member of `appsecretaccess`), executes the `secret_retriever.get_password("oracle_db")` function.
-5.  This function reads the GPG passphrase from `/opt/credential_store/.gpg_passphrase` and uses it to decrypt `/opt/credential_store/oracle_db_password.txt.gpg`.
-6.  The decrypted password is returned and used to build the `sqlalchemy` connection string.
-7.  The script connects to the Oracle database and proceeds as before.
+
+1. At 1:00 AM, `cron` runs `/ims/cunyfirst/dailyoim_venv.sh` as the user `flengyel`.
+2. The wrapper script (`dailyoim_venv.sh`) sets `LD_LIBRARY_PATH`, changes directory, and activates the Python virtual environment.
+3. It then executes the **modified** `cunyfirst.py` script.
+4. The Python script, now running as `flengyel` (who is a member of `appsecretaccess`), executes the `secret_retriever.get_password("oracle_db")` function.
+5. This function reads the GPG passphrase from `/opt/credential_store/.gpg_passphrase` and uses it to decrypt `/opt/credential_store/oracle_db_password.txt.gpg`.
+6. The decrypted password is returned and used to build the `sqlalchemy` connection string.
+7. The script connects to the Oracle database and proceeds as before.
 
    This integration is seamless and requires no changes to the cron schedule or wrapper scripts.
    The only change is making the Python script itself responsible for securely fetching the credentials it needs.
-
-   
