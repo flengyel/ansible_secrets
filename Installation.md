@@ -11,7 +11,7 @@ This guide will walk through the setup of the Ansible Secrets project, password 
 - **Single GPG Passphrase (to encrypt above passwords):** `MyV3ryStr0ngGPGPassphr@s3`
 - **Ansible Vault Password (to protect the GPG passphrase):** `MyUltraS3cureAnsibl3VaultP@ss`
 - **Project & Secret Directories:**
-  1. Ansible Project: `/opt/ansible_secret_deployment`
+  1. Ansible Project: `/opt/ansible_secrets`
   2. Deployed Secrets: `/opt/credential_store`
 - **Users & Groups:**
   1. Service User: `myappuser`
@@ -56,9 +56,9 @@ This isolates your Ansible installation.
 
 ```bash
 # Create and take ownership of the Ansible project directory
-sudo mkdir -p /opt/ansible_secret_deployment
-sudo chown flengyel:flengyel /opt/ansible_secret_deployment
-cd /opt/ansible_secret_deployment
+sudo mkdir -p /opt/ansible_secrets
+sudo chown flengyel:flengyel /opt/ansible_secrets
+cd /opt/ansible_secrets
 
 # Create a Python virtual environment inside the project directory
 python3 -m venv venv
@@ -81,7 +81,7 @@ This is a one-time setup step for each password.
 
 ```bash
 # Ensure you are in your project directory and the venv is active
-cd /opt/ansible_secret_deployment
+cd /opt/ansible_secrets
 
 # Create a subdirectory for the GPG files
 mkdir -p files
@@ -112,7 +112,7 @@ You now have `ldap_dm_password.txt.gpg`, `ldap_ro_password.txt.gpg`, and `oracle
 ## 2.2. Prepare the Ansible Vault
 
 ```bash
-# Ensure you are in the project root (/opt/ansible_secret_deployment)
+# Ensure you are in the project root (/opt/ansible_secrets)
 # Create the vault password file
 echo "MyUltraS3cureAnsibl3VaultP@ss" > .ansible_vault_password
 chmod 600 .ansible_vault_password
@@ -134,7 +134,7 @@ Save and close the file. It is now encrypted.
 
 ### 3.1. Configure Ansible (`ansible.cfg` and `inventory`)
 
-- Create `/opt/ansible_secret_deployment/ansible.cfg`:
+- Create `/opt/ansible_secrets/ansible.cfg`:
 
 ```ini
 [defaults]
@@ -149,7 +149,7 @@ become_user = root
 become_ask_pass = false
 ```
 
-- Create `/opt/ansible_secret_deployment/inventory`:
+- Create `/opt/ansible_secrets/inventory`:
 
 ```ini
 [local_server]
@@ -158,7 +158,7 @@ localhost ansible_connection=local ansible_python_interpreter={{ ansible_playboo
 
 ### 3.2. Create the Ansible Playbook (`deploy_secrets.yml`)
 
-Create `/opt/ansible_secret_deployment/deploy_secrets.yml`:
+Create `/opt/ansible_secrets/deploy_secrets.yml`:
 
 ``` yaml
 - name: Deploy Application Secrets Locally
@@ -200,10 +200,10 @@ Create `/opt/ansible_secret_deployment/deploy_secrets.yml`:
 *Create a supporting task file for clarity, `tasks/setup.yml`*:
 
 ```bash
-mkdir -p /opt/ansible_secret_deployment/tasks
+mkdir -p /opt/ansible_secrets/tasks
 ```
 
-Create `/opt/ansible_secret_deployment/tasks/setup.yml`:
+Create `/opt/ansible_secrets/tasks/setup.yml`:
 
 ```yaml
 - name: Ensure the secret access group exists
@@ -233,7 +233,7 @@ Create `/opt/ansible_secret_deployment/tasks/setup.yml`:
 
 ```bash
 # Ensure you are in the project root and your venv is active
-cd /opt/ansible_secret_deployment
+cd /opt/ansible_secrets
 source venv/bin/activate
 
 # Run the playbook
