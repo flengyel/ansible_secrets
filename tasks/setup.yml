@@ -1,0 +1,20 @@
+- name: Ensure the secret access group exists
+  ansible.builtin.group:
+    name: "{{ secret_access_group }}"
+    state: present
+    system: true
+
+- name: Ensure service user is part of the secret access group
+  ansible.builtin.user:
+    name: "{{ service_user }}"
+    groups: "{{ secret_access_group }}"
+    append: true
+
+- name: Ensure secrets target directory exists with correct permissions
+  ansible.builtin.file:
+    path: "{{ secrets_target_dir }}"
+    state: directory
+    owner: "{{ service_user }}"
+    group: "{{ secret_access_group }}"
+    mode: '0750'
+
