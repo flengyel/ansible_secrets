@@ -88,9 +88,9 @@ mkdir -p files
 cd files
 
 # Create the plaintext password files
-printf 'Ldap&DmP@sswOrd!2025' > ldap_dm_password.txt
-printf 'LdapR0nlyP@sswOrd' > ldap_ro_password.txt
-printf 'S3cureOracle!P@ss' > oracle_db_password.txt
+printf 'Ldap&DmP@sswOrd!2025' > ldap_dm_pswd.txt
+printf 'LdapR0nlyP@sswOrd' > ldap_ro_pswd.txt
+printf 'S3cureOracle!P@ss' > oracle_db_pswd.txt
 
 # Encrypt all three files using the SAME GPG passphrase
 GPG_PASSPHRASE='MyV3ryStr0ngGPGPassphr@s3'
@@ -107,7 +107,7 @@ shred --remove *.txt
 cd ..
 ```
 
-You now have `ldap_dm_password.txt.gpg`, `ldap_ro_password.txt.gpg`, and `oracle_db_password.txt.gpg` in your `files/` subdirectory.
+You now have `ldap_dm_pswd.txt.gpg`, `ldap_ro_pswd.txt.gpg`, and `oracle_db_pswd.txt.gpg` in your `files/` subdirectory.
 
 ## 2.2. Prepare the Ansible Vault
 
@@ -253,9 +253,9 @@ The output should look like this (owner, group, permissions, and files must matc
 ```bash
 total 12
 -r--r----- 1 service_account appsecretaccess  111 Jun 07 08:44 .gpg_passphrase
--r--r----- 1 service_account appsecretaccess 1408 Jun 07 08:44 ldap_dm_password.txt.gpg
--r--r----- 1 service_account appsecretaccess 1408 Jun 07 08:44 ldap_ro_password.txt.gpg
--r--r----- 1 service_account appsecretaccess 1408 Jun 07 08:44 oracle_db_password.txt.gpg
+-r--r----- 1 service_account appsecretaccess 1408 Jun 07 08:44 ldap_dm_pswd.txt.gpg
+-r--r----- 1 service_account appsecretaccess 1408 Jun 07 08:44 ldap_ro_pswd.txt.gpg
+-r--r----- 1 service_account appsecretaccess 1408 Jun 07 08:44 oracle_db_pswd.txt.gpg
 ```
 
 ## Section 5: Script Integration and Runtime Operation
@@ -280,7 +280,7 @@ fi
 
 SECRET_NAME="$1"
 SECRETS_DIR="/opt/credential_store"
-ENC_FILE="${SECRETS_DIR}/${SECRET_NAME}_password.txt.gpg"
+ENC_FILE="${SECRETS_DIR}/${SECRET_NAME}_pswd.txt.gpg"
 GPG_PASSPHRASE_FILE="${SECRETS_DIR}/.gpg_passphrase"
 
 if [[ ! -r "$ENC_FILE" ]]; then
@@ -337,7 +337,7 @@ def get_password(secret_name: str) -> str:
     Retrieves a decrypted password for a given secret name.
     Raises RuntimeError on failure.
     """
-    enc_file = os.path.join(SECRETS_DIR, f"{secret_name}_password.txt.gpg")
+    enc_file = os.path.join(SECRETS_DIR, f"{secret_name}_pswd.txt.gpg")
     if not os.path.exists(enc_file):
         raise FileNotFoundError(f"Encrypted secret for '{secret_name}' not found.")
 
