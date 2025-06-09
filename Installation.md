@@ -5,9 +5,9 @@ This guide will walk through the setup of the Ansible Secrets project, password 
 **Placeholders Used in This Guide (REPLACE WITH YOUR ACTUAL VALUES):**
 
 - **Application Passwords:**
-  1.  LDAP DM Password: `Ldap&DmP@sswOrd!2025`
-  2.  LDAP RO Password: `LdapR0nlyP@sswOrd`
-  3.  Oracle DB Password: `S3cureOracle!P@ss`
+  1. LDAP DM Password: `Ldap&DmP@sswOrd!2025`
+  2. LDAP RO Password: `LdapR0nlyP@sswOrd`
+  3. Oracle DB Password: `S3cureOracle!P@ss`
 - **Single GPG Passphrase (to encrypt above passwords):** `MyV3ryStr0ngGPGPassphr@s3`
 - **Ansible Vault Password (to protect the GPG passphrase):** `MyUltraS3cureAnsibl3VaultP@ss`
 - **Project & Secret Directories:**
@@ -93,7 +93,7 @@ printf 'LdapR0nlyP@sswOrd' > ldap_ro_password.txt
 printf 'S3cureOracle!P@ss' > oracle_db_password.txt
 
 # Encrypt all three files using the SAME GPG passphrase
-GPG_PASSPHRASE="MyV3ryStr0ngGPGPassphr@s3"
+GPG_PASSPHRASE='MyV3ryStr0ngGPGPassphr@s3'
 for f in *.txt; do
   gpg --batch --yes --symmetric --cipher-algo AES256 \
       --passphrase "$GPG_PASSPHRASE" "$f"
