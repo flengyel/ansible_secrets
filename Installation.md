@@ -27,7 +27,7 @@ These steps prepare the server environment with the necessary users, groups, and
 Run these commands on your RHEL server as a user with `sudo` privileges.
 
 ```bash
-# Create the dedicated service user (this will reside in OUD, though that isn't necessary)
+# Create the dedicated service user (these are EAD accounts, but I suggest creating a local workstation account)
 sudo useradd --system --shell /sbin/nologin --comment "Service account for myapp" myappuser
 
 # Create the dedicated access group
