@@ -14,7 +14,7 @@ This guide will walk through the setup of the Ansible Secrets project, password 
   1. Ansible Project: `/opt/ansible_secrets`
   2. Deployed Secrets: `/opt/credential_store`
 - **Users & Groups:**
-  1. Service User: `myappuser`
+  1. Service User: `service_account`
   2. Access Group: `appsecretaccess`
   3. Admin User (you): `flengyel`
 
@@ -28,13 +28,13 @@ Run these commands on your RHEL server as a user with `sudo` privileges.
 
 ```bash
 # Create the dedicated service user (these are EAD accounts, but I suggest creating a local workstation account)
-sudo useradd --system --shell /sbin/nologin --comment "Service account for myapp" myappuser
+sudo useradd --system --shell /sbin/nologin --comment "Service account for myapp" service_account
 
 # Create the dedicated access group
 sudo groupadd --system appsecretaccess
 
 # Add the service user to the access group
-sudo usermod -aG appsecretaccess myappuser
+sudo usermod -aG appsecretaccess service_account
 
 # Add yourself and any other required users to the access group
 sudo usermod -aG appsecretaccess flengyel
@@ -252,10 +252,10 @@ The output should look like this (owner, group, permissions, and files must matc
 
 ```bash
 total 12
--r--r----- 1 myappuser appsecretaccess  111 Jun 07 08:44 .gpg_passphrase
--r--r----- 1 myappuser appsecretaccess 1408 Jun 07 08:44 ldap_dm_password.txt.gpg
--r--r----- 1 myappuser appsecretaccess 1408 Jun 07 08:44 ldap_ro_password.txt.gpg
--r--r----- 1 myappuser appsecretaccess 1408 Jun 07 08:44 oracle_db_password.txt.gpg
+-r--r----- 1 service_account appsecretaccess  111 Jun 07 08:44 .gpg_passphrase
+-r--r----- 1 service_account appsecretaccess 1408 Jun 07 08:44 ldap_dm_password.txt.gpg
+-r--r----- 1 service_account appsecretaccess 1408 Jun 07 08:44 ldap_ro_password.txt.gpg
+-r--r----- 1 service_account appsecretaccess 1408 Jun 07 08:44 oracle_db_password.txt.gpg
 ```
 
 ## Section 5: Script Integration and Runtime Operation
@@ -297,7 +297,7 @@ gpg --batch --quiet --yes \
 - Set its permissions:
 
 ```bash
-sudo chown myappuser:appsecretaccess /usr/local/bin/get_secret.sh
+sudo chown service_account:appsecretaccess /usr/local/bin/get_secret.sh
 sudo chmod 0750 /usr/local/bin/get_secret.sh # Owner rwx, Group rx
 ```
 
@@ -363,7 +363,7 @@ def get_password(secret_name: str) -> str:
 
 ```bash
 sudo mkdir -p /usr/local/lib/ansible_secret_helpers
-sudo chown myappuser:appsecretaccess /usr/local/lib/ansible_secret_helpers/secret_retriever.py
+sudo chown service_account:appsecretaccess /usr/local/lib/ansible_secret_helpers/secret_retriever.py
 sudo chmod 0640 /usr/local/lib/ansible_secret_helpers/secret_retriever.py # Owner rw, Group r
 ```
 
