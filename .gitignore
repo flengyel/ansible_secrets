@@ -1,0 +1,15 @@
+# .gitignore
+
+# Ignore the Ansible Vault password file. This is the master key and MUST NOT be committed.
+.ansible_vault_password
+
+# Ignore the Python virtual environment directory.
+/venv/
+
+# Ignore Python cache files
+__pycache__/
+*.pyc
+*.pyo
+
+# Ignore Ansible retry files
+*.retry

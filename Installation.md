@@ -165,12 +165,12 @@ Create `/opt/ansible_secrets/deploy_secrets.yml`:
   hosts: local_server
   vars:
     secrets_target_dir: "/opt/credential_store"
-    service_user: "myappuser"
+    service_user: "service_account"
     secret_access_group: "appsecretaccess"
     encrypted_secret_files:
-      - ldap_dm_password.txt.gpg
-      - ldap_ro_password.txt.gpg
-      - oracle_db_password.txt.gpg
+      - green_dm_pswd.txt.gpg
+      - yellow_dm_pswd.txt.gpg
+      - oracle_db_pswd.txt.gpg
   vars_files:
     - group_vars/all/vault.yml
 
