@@ -28,7 +28,7 @@ Run these commands on your RHEL server as a user with `sudo` privileges.
 
 ```bash
 # Create the dedicated service user (these are EAD accounts, but I suggest creating a local workstation account)
-sudo useradd --system --shell /sbin/nologin --comment "Service account for myapp" service_account
+sudo useradd --system --shell /sbin/nologin --comment "Service account for Bash and Python apps" service_account
 
 # Create the dedicated access group
 sudo groupadd --system appsecretaccess
@@ -146,7 +146,7 @@ host_key_checking = False
 become = true
 become_method = sudo
 become_user = root
-become_ask_pass = false
+become_ask_pass = true
 ```
 
 - Create `/opt/ansible_secrets/inventory`:
