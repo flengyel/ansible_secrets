@@ -1,6 +1,6 @@
 # Ansible Secrets
 
-Ansible Secrets provides three passwords (LDAP Directory Manager, LDAP read-only, Oracle DB) to Bash and Python scripts without exposing those passwords in plaintext.
+Ansible Secrets provides encrypted passwords (LDAP Directory Manager, LDAP read-only, Oracle DB) to Bash and Python scripts without exposing those passwords in plaintext.
 
 ## System Components and Directory Structure
 
