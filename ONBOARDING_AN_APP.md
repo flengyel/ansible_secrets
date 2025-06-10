@@ -15,10 +15,11 @@ Locate the script you need to secure and modify its source code to fetch credent
 ### For a Bash Script
 
 1. Identify the line where the plaintext password is used.
-2. Remove the plaintext password.Add a command to call the reusable helper script `/usr/local/bin/get_secret.sh`, passing the name of the secret you need (e.g., oracle_db).
-3. Store the result in a variable and check that the retrieval was successful.
-4. Use the variable in your application logic.
-5. `unset` the variable as soon as it is no longer needed.
+2. Remove the plaintext password.
+3. Add a command to call the reusable helper script `/usr/local/bin/get_secret.sh`, passing the name of the secret you need (e.g., oracle_db).
+4. Store the result in a variable and check that the retrieval was successful.
+5. Use the variable in your application logic.
+6. `unset` the variable as soon as it is no longer needed.
 
 #### Example Modification  
 
