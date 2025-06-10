@@ -120,3 +120,28 @@ After setting the final permissions, perform a final test by running the applica
 To run the script interactively for testing, your user account must be a member of the `appsecretaccess` group.
 
 If the script runs successfully, the onboarding process is complete. The script is now ready for its production use (e.g., being called by a `cronjob` running as the `service_account` user).  
+
+## Step 4: Configuring for Automated Execution (Cron)
+
+For scheduled tasks, the script must be run by the `service_account` user to ensure it has the correct permissions.
+
+### Requirements for Cronjobs
+
+- User: The cronjob must be configured to run as the `service_account` user.
+
+- Absolute Paths: The cron environment is minimal. Always use absolute paths for all scripts and executables in your command (e.g., /usr/local/bin/get_secret.sh, /usr/bin/python3).
+
+- Logging: Always redirect standard output (>) and standard error (2>&1) to a log file for debugging.
+
+#### Example Cronjob Entry
+
+For system services, it is best practice to add a configuration file in the `/etc/cron.d/` directory.
+
+Example for a file named /`etc/cron.d/my-oracle-report`:
+
+```bash
+# Run the Oracle report script daily at 2:00 AM as service_account
+0 2 * * * service_account   /path/to/your/oracle_report_wrapper.sh >> /var/log/oracle_report.log 2>&1
+```
+
+This entry specifies the schedule, the user (`service_account`), the full command to run, and logging redirection.
