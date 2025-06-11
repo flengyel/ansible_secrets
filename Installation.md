@@ -372,11 +372,19 @@ sudo chmod 0640 /usr/local/lib/ansible_secret_helpers/secret_retriever.py # Owne
 - **How to use it in another Python script:**
 
 ```python
+How to use it in another Python script (Improved Example):
+
+This example demonstrates a more robust integration pattern based on a real-world script. It shows how to retrieve a secret and use it to connect to a database within a structured application.
+
 #!/usr/bin/env python3
+import csv
+import sqlalchemy
+import cx_Oracle as cx
+import argparse as arg
 import sys
 import os
 
-# --- Start of required modification ---
+# --- Start: Required code block for secret retrieval ---
 # Define the path to the helper library.
 HELPER_LIB_PATH = "/usr/local/lib/ansible_secret_helpers"
 
@@ -392,24 +400,84 @@ except ImportError:
     print(f"CRITICAL ERROR: Could not import 'secret_retriever'.", file=sys.stderr)
     print(f"Ensure '{HELPER_LIB_PATH}' exists and is readable.", file=sys.stderr)
     sys.exit(1)
-# --- End of required modification ---
+# --- End: Required code block ---
 
 
-ldap_dm_pass = None
-try:
-    # The rest of your script logic remains the same.
-    ldap_dm_pass = secret_retriever.get_password("ldap_dm")
-    print(f"Successfully retrieved LDAP DM password of length {len(ldap_dm_pass)}")
-    # Now use ldap_dm_pass to connect to LDAP
-    # ...
+def create_secure_connection(dbhost, dbport, dbsid, secret_name, user):
+    """
+    Retrieves a password from the credential store and creates a DB connection.
+    Returns a tuple of (engine, connection).
+    """
+    db_password = None
+    engine = None
+    conn = None
+    try:
+        # Retrieve the specified password using the helper function
+        db_password = secret_retriever.get_password(secret_name)
+        if not db_password:
+            raise RuntimeError(f"Retrieved empty password for '{secret_name}'")
 
-except Exception as e:
-    print(f"Error: {e}", file=sys.stderr)
+        datasourcename = cx.makedsn(dbhost, dbport, service_name=dbsid)
+        connectstring = f'oracle+cx_oracle://{user}:{db_password}@{datasourcename}'
 
-finally:
-    # Clear the variable reference
-    ldap_dm_pass = None
-    print("Execution finished. Secret cleared from memory.")
+        # Clear the plaintext password from memory as soon as it's used
+        db_password = None
+
+        engine = sqlalchemy.create_engine(connectstring, max_identifier_length=128)
+        conn = engine.connect()
+        return engine, conn
+
+    except Exception as e:
+        print(f"Error creating database connection: {e}", file=sys.stderr)
+        # Ensure resources are cleaned up on failure
+        if conn:
+            conn.close()
+        if engine:
+            engine.dispose()
+        sys.exit(1) # Exit with an error code
+
+
+def main():
+    """Main execution logic"""
+    parser = arg.ArgumentParser(description="Check password reset status for a given EMPLID.")
+    parser.add_argument('emplid', type=str, help='Search for a specific EMPLID.')
+    args = parser.parse_args()
+
+    dbhost = 'IAMPRDDB1.cuny.edu'
+    dbport = '2483'
+    dbsid = 'PDIMOIG_HUD'
+    db_user = 'flengyel' # This username could also be stored as a secret
+    secret_name_for_db = 'oig_db' # The name of the secret to fetch
+
+    engine, conn = None, None
+    try:
+        # Establish the secure connection
+        engine, conn = create_secure_connection(dbhost, dbport, dbsid, secret_name_for_db, db_user)
+        print(f"Successfully connected to {dbsid} as {db_user}.")
+
+        # --- Your application logic starts here ---
+        where_clause = f" WHERE U.USR_EMP_NO = '{args.emplid}'"
+        count_statement = 'SELECT COUNT(*) FROM GREEN_OIM.PWH P INNER JOIN GREEN_OIM.USR U ON P.USR_KEY = U.USR_KEY' + where_clause
+
+        count_result = conn.execute(count_statement).scalar()
+        if count_result == 0:
+            print(f"User {args.emplid} must reset their password.")
+        else:
+            print(f"OIM can sync password for {args.emplid}")
+
+        # ... add other queries here ...
+
+    finally:
+        # Ensure the connection is always closed
+        if conn:
+            conn.close()
+        if engine:
+            engine.dispose()
+        print("Execution finished. Database connection closed.")
+
+if __name__ == "__main__":
+    main()
+
 ```
 
 ## Section 6: App script ownership and permissions
