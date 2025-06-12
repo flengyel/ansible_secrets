@@ -88,10 +88,10 @@ mkdir -p files
 cd files
 
 # Create the plaintext password files
-printf 'Green&DmP@swd!2025' > green_dm_pswd.txt
-printf 'Yellow&DmP@swd!2025' > yellow_dm_pswd.txt
-printf 'LdapR0nlyP@sswOrd' > ldap_ro_pswd.txt
-printf 'S3cureOracle!P@ss' > oracle_db_pswd.txt
+printf 'Green&DmP@swd!2025' > green_dm_secret.txt
+printf 'Yellow&DmP@swd!2025' > yellow_dm_secret.txt
+printf 'LdapR0nlyP@sswOrd' > ldap_ro_secret.txt
+printf 'S3cureOracle!P@ss' > oracle_db_secret.txt
 
 # Encrypt all three files using the SAME GPG passphrase
 GPG_PASSPHRASE='MyV3ryStr0ngGPGPassphr@s3'
@@ -108,7 +108,7 @@ shred --remove *.txt
 cd ..
 ```
 
-You now have `green_dm_pswd.txt.gpg`, `yellow_dm_pswd.txt.gpg`, `ldap_ro_pswd.txt.gpg`, and `oracle_db_pswd.txt.gpg` in your `files/` subdirectory.
+You now have `green_dm_secret.txt.gpg`, `yellow_dm_secret.txt.gpg`, `ldap_ro_secret.txt.gpg`, and `oracle_db_secret.txt.gpg` in your `files/` subdirectory.
 
 ## 2.2. Prepare the Ansible Vault
 
@@ -169,10 +169,10 @@ Create `/opt/ansible_secrets/deploy_secrets.yml`:
     service_user: "service_account"
     secret_access_group: "appsecretaccess"
     encrypted_secret_files:
-      - green_dm_pswd.txt.gpg
-      - yellow_dm_pswd.txt.gpg
-      - ldap_ro_pswd.txt.gpg
-      - oracle_db_pswd.txt.gpg
+      - green_dm_secret.txt.gpg
+      - yellow_dm_secret.txt.gpg
+      - ldap_ro_secret.txt.gpg
+      - oracle_db_secret.txt.gpg
   vars_files:
     - group_vars/all/vault.yml
 
@@ -255,9 +255,9 @@ The output should look like this (owner, group, permissions, and files must matc
 ```bash
 total 12
 -r--r----- 1 service_account appsecretaccess  111 Jun 07 08:44 .gpg_passphrase
--r--r----- 1 service_account appsecretaccess 1408 Jun 07 08:44 ldap_dm_pswd.txt.gpg
--r--r----- 1 service_account appsecretaccess 1408 Jun 07 08:44 ldap_ro_pswd.txt.gpg
--r--r----- 1 service_account appsecretaccess 1408 Jun 07 08:44 oracle_db_pswd.txt.gpg
+-r--r----- 1 service_account appsecretaccess 1408 Jun 07 08:44 ldap_dm_secret.txt.gpg
+-r--r----- 1 service_account appsecretaccess 1408 Jun 07 08:44 ldap_ro_secret.txt.gpg
+-r--r----- 1 service_account appsecretaccess 1408 Jun 07 08:44 oracle_db_secret.txt.gpg
 ```
 
 ## Section 5: Script Integration and Runtime Operation
@@ -282,7 +282,7 @@ fi
 
 SECRET_NAME="$1"
 SECRETS_DIR="/opt/credential_store"
-ENC_FILE="${SECRETS_DIR}/${SECRET_NAME}_pswd.txt.gpg"
+ENC_FILE="${SECRETS_DIR}/${SECRET_NAME}_secret.txt.gpg"
 GPG_PASSPHRASE_FILE="${SECRETS_DIR}/.gpg_passphrase"
 
 if [[ ! -r "$ENC_FILE" ]]; then
@@ -339,7 +339,7 @@ def get_password(secret_name: str) -> str:
     Retrieves a decrypted password for a given secret name.
     Raises RuntimeError on failure.
     """
-    enc_file = os.path.join(SECRETS_DIR, f"{secret_name}_pswd.txt.gpg")
+    enc_file = os.path.join(SECRETS_DIR, f"{secret_name}_secret.txt.gpg")
     if not os.path.exists(enc_file):
         raise FileNotFoundError(f"Encrypted secret for '{secret_name}' not found.")
 

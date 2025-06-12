@@ -33,7 +33,7 @@ if [[ $# -ne 1 ]]; then
 fi
 
 SECRET_NAME="$1"
-OUTPUT_FILE="${FILES_DIR}/${SECRET_NAME}_pswd.txt.gpg"
+OUTPUT_FILE="${FILES_DIR}/${SECRET_NAME}_secret.txt.gpg"
 
 # 2. Check if required directories and files exist.
 if [[ ! -d "$ANSIBLE_PROJECT_DIR" ]]; then

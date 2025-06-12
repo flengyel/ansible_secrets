@@ -19,7 +19,7 @@ cd /opt/ansible_secrets
 
 ./add-secret.sh mssql_db
 ```
-After the script runs successfully, a new encrypted file named `mssql_db_pswd.txt.gpg` will be created in the `/opt/ansible_secrets/files/` directory with the correct ownership.
+After the script runs successfully, a new encrypted file named `mssql_db_secret.txt.gpg` will be created in the `/opt/ansible_secrets/files/` directory with the correct ownership.
 
 ### Step 2: Update the Ansible Playbook
 
@@ -32,9 +32,9 @@ vars:
   service_user: "service_account"
   secret_access_group: "appsecretaccess"
   encrypted_secret_files:
-    - green_dm_pswd.txt.gpg
-    - ldap_ro_pswd.txt.gpg
-    - yellow_dm_pswd.txt.gpg
+    - green_dm_secret.txt.gpg
+    - ldap_ro_secret.txt.gpg
+    - yellow_dm_secret.txt.gpg
 ```
 Add the new filename to the encrypted_secret_files list:vars:
 
@@ -43,10 +43,10 @@ Add the new filename to the encrypted_secret_files list:vars:
   service_user: "service_account"
   secret_access_group: "appsecretaccess"
   encrypted_secret_files:
-    - green_dm_pswd.txt.gpg
-    - ldap_ro_pswd.txt.gpg
-    - yellow_dm_pswd.txt.gpg
-    - mssql_db_pswd.txt.gpg  # <-- Add the new file here
+    - green_dm_secret.txt.gpg
+    - ldap_ro_secret.txt.gpg
+    - yellow_dm_secret.txt.gpg
+    - mssql_db_secret.txt.gpg  # <-- Add the new file here
 ```
 
 Save the playbook file.
@@ -66,7 +66,7 @@ ansible-playbook deploy_secrets.yml
 
 #### Re-running the Playbook
 
-Because Ansible is idempotent, it will be very efficient. It will check the state of the existing files and find that they are already correct (they will show up as "ok"). It will only perform the action for the new file, copying `mssql_db_pswd.txt.gpg` to `/opt/credential_store` and setting its permissions (this will show up as "changed").
+Because Ansible is idempotent, it will be very efficient. It will check the state of the existing files and find that they are already correct (they will show up as "ok"). It will only perform the action for the new file, copying `mssql_db_secret.txt.gpg` to `/opt/credential_store` and setting its permissions (this will show up as "changed").
 
 ### Step 4: Use the New Secret in Your Scripts
 

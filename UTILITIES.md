@@ -45,7 +45,7 @@ if [[ $# -ne 1 ]]; then
 fi
 
 SECRET_NAME="$1"
-OUTPUT_FILE="${FILES_DIR}/${SECRET_NAME}_pswd.txt.gpg"
+OUTPUT_FILE="${FILES_DIR}/${SECRET_NAME}_secret.txt.gpg"
 
 if [[ ! -d "$ANSIBLE_PROJECT_DIR" || ! -f "$VAULT_FILE" || ! -f "$VENV_PATH" ]]; then
     echo "Error: Required project files or directories not found in '$ANSIBLE_PROJECT_DIR'." >&2
