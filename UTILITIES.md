@@ -1,12 +1,16 @@
-# Utility Scripts
+# Utility & Helper Scripts
 
-This file documents the administrative helper scripts used to manage the Ansible Secrets system.
+This file documents the administrative and helper scripts used to manage and interact with the Ansible Secrets system.
+
+## 1. Administrative Scripts
+
+These scripts are used by administrators to manage the secret deployment process.
 
 ## `add-secret.sh`
 
 Purpose: This script securely encrypts and adds a new secret to the Ansible project. It automates the process of creating a GPG-encrypted password file, ensuring the correct GPG passphrase from Ansible Vault is used. This eliminates common errors from manual typos or hidden characters.
 
-### Installation
+Installation:
 
 This script is designed to be run from within the Ansible project directory.
 
@@ -21,7 +25,7 @@ sudo chown flengyel:"domain users" /opt/ansible_secrets/add-secret.sh
 sudo chmod 750 /opt/ansible_secrets/add-secret.sh
 ```
 
-#### Source Code
+Source Code:
 
 ```bash
 #!/bin/bash
@@ -98,7 +102,7 @@ deactivate
 echo "--> Done."
 ```
 
-### Usage
+Usage:
 
 Must be run from within the Ansible project directory
 
@@ -111,7 +115,7 @@ cd /opt/ansible_secrets
 
 Purpose: This script applies the standard production ownership (service_account:appsecretaccess) and permissions (0750) to an application script. It includes validation to ensure it is only run on `.sh` or `.py` files.
 
-### Installation
+Installation:
 
 This is a general-purpose utility and should be placed in a system-wide binary path.
 
@@ -125,7 +129,7 @@ Make it executable:
 sudo chmod 755 /usr/local/bin/secure-app.sh
 ```
 
-#### Source Code
+Source Code:
 
 ```bash
 #!/bin/bash
@@ -167,3 +171,157 @@ Usage
 # Must be run by an administrator with sudo privileges.
 sudo /usr/local/bin/secure-app.sh /path/to/your/application_script.py
 ```
+
+## 2. Runtime Helper Modules & Scripts
+
+These are the scripts and modules used by your application scripts at runtime to retrieve secrets and establish connections. They are installed in `/usr/local/lib/ansible_secret_helpers/` and `/usr/local/bin/`.
+
+## `secret_retriever.py`
+
+Purpose: Provides the low-level `get_secret()` function for Python scripts to retrieve secrets. This is the foundation for the other helpers.
+
+Installation:
+
+Create the file /usr/local/lib/ansible_secret_helpers/secret_retriever.py.
+
+Add the source code below.
+
+Set permissions: sudo chmod 0640 /usr/local/lib/ansible_secret_helpers/secret_retriever.py and ensure the parent directory has correct ownership (service_account:appsecretaccess) and permissions (0750).
+
+Source Code:
+
+```python
+# /usr/local/lib/ansible_secret_helpers/secret_retriever.py
+import os
+import subprocess
+
+SECRETS_DIR = "/opt/credential_store"
+GPG_PASSPHRASE_FILE = os.path.join(SECRETS_DIR, ".gpg_passphrase")
+
+def get_secret(secret_name: str) -> str:
+    """
+    Retrieves a decrypted secret for a given secret name.
+    Raises RuntimeError on failure.
+    """
+    # Note the use of the _secret.txt.gpg suffix
+    enc_file = os.path.join(SECRETS_DIR, f"{secret_name}_secret.txt.gpg")
+    if not os.path.exists(enc_file):
+        raise FileNotFoundError(f"Encrypted secret for '{secret_name}' not found.")
+    
+    cmd = ["gpg", "--batch", "--quiet", "--yes", "--passphrase-file", GPG_PASSPHRASE_FILE, "--decrypt", enc_file]
+    
+    try:
+        result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, check=True)
+        return result.stdout.strip()
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(f"GPG decryption failed for '{secret_name}': {e.stderr}")
+    except FileNotFoundError:
+        raise RuntimeError("gpg command not found. Is GnuPG installed?")
+```
+
+## `connection_helpers.py` (New File)
+
+**Purpose:** Provides high-level, reusable functions for establishing database and LDAP connections using secrets from the credential store. Your application scripts should prefer using these functions.
+
+**Installation:**
+
+Create the file `/usr/local/lib/ansible_secret_helpers/connection_helpers.py`.
+
+Add the source code below.
+
+```bash
+Set permissions: sudo chmod 0640 /usr/local/lib/ansible_secret_helpers/connection_helpers.py.
+```
+
+Source Code:
+
+```python
+# /usr/local/lib/ansible_secret_helpers/connection_helpers.py
+import sys
+import ssl
+import sqlalchemy
+import cx_Oracle as cx
+from ldap3 import Server, Connection, ALL, Tls # Requires ldap3 library
+import secret_retriever # Imports the local module
+
+def create_ldap_connection(ldap_server, user_secret, pswd_secret):
+    """
+    Retrieves credentials and establishes a secure LDAP connection.
+    Returns a bound ldap3 Connection object.
+    """
+    oud_user = None
+    oud_pswd = None
+    try:
+        oud_user = secret_retriever.get_secret(user_secret)
+        oud_pswd = secret_retriever.get_secret(pswd_secret)
+
+        tls = Tls(validate=ssl.CERT_NONE)
+        srv = Server(ldap_server, port=636, get_info=ALL, use_ssl=True, tls=tls)
+        oud = Connection(srv, user=oud_user, password=oud_pswd, auto_bind=True)
+
+        # Clear credentials from memory immediately after use
+        oud_user = None
+        oud_pswd = None
+
+        if not oud.bound:
+            # Use the correct server variable in the error message
+            raise ConnectionError(f'Error: cannot bind to {ldap_server}')
+        
+        # Return the connection object only on success
+        return oud
+
+    except Exception as e:
+        # Properly handle exceptions and exit
+        print(f"Error creating LDAP connection: {e}", file=sys.stderr)
+        sys.exit(1)
+```
+
+
+```python
+def create_db_connection(dbhost, dbport, dbsid, user_secret, pswd_secret):
+    """
+    Retrieves credentials from the credential store and creates an Oracle DB connection.
+    Returns a tuple of (engine, connection).
+    """
+    db_user = None
+    db_pswd = None
+    engine = None
+    conn = None
+    try:
+        db_user = secret_retriever.get_secret(user_secret)
+        if not db_user:
+            raise RuntimeError(f"Retrieved empty username secret for '{user_secret}'")
+
+        db_pswd = secret_retriever.get_secret(pswd_secret)
+        if not db_pswd:
+            raise RuntimeError(f"Retrieved empty password for '{pswd_secret}'")
+
+        datasourcename = cx.makedsn(dbhost, dbport, service_name=dbsid)
+        connectstring = f'oracle+cx_oracle://{db_user}:{db_pswd}@{datasourcename}'
+        
+        # Clear credentials from memory immediately after use
+        db_user = None
+        db_pswd = None
+        
+        engine = sqlalchemy.create_engine(connectstring, max_identifier_length=128)
+        conn = engine.connect()
+        return engine, conn
+
+    except Exception as e:
+        print(f"Error creating database connection: {e}", file=sys.stderr)
+        # Ensure resources are cleaned up on failure
+        if conn:
+            conn.close()
+        if engine:
+            engine.dispose()
+        sys.exit(1)
+```
+
+`get-secret.sh` (for Bash scripts)
+(Note the function rename from get_password to get_secret is a Python-specific change, so the Bash script name get_secret.sh remains appropriate and unchanged.)
+
+Purpose: Takes a secret name as an argument and prints the decrypted secret to standard output.
+
+**Installation:**
+
+See INSTALLATION.md for details.

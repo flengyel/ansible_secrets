@@ -1,4 +1,4 @@
-# Implementation Guide: Secure Credential Management with GPG and Ansible Vault
+# Installation Guide: Secure Credential Management with GPG and Ansible Vault
 
 This guide will walk through the setup of the Ansible Secrets project, password (secret) encryption , the Ansible playbook for local deployment, and finally, the integration with Bash and Python scripts.
 
@@ -334,7 +334,7 @@ import subprocess
 SECRETS_DIR = "/opt/credential_store"
 GPG_PASSPHRASE_FILE = os.path.join(SECRETS_DIR, ".gpg_passphrase")
 
-def get_password(secret_name: str) -> str:
+def get_secret(secret_name: str) -> str:
     """
     Retrieves a decrypted password for a given secret name.
     Raises RuntimeError on failure.
