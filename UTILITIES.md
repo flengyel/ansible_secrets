@@ -6,7 +6,7 @@ This file documents the administrative and helper scripts used to manage and int
 
 These scripts are used by administrators to manage the secret deployment process.
 
-## `add-secret.sh`
+### `add-secret.sh`
 
 **Purpose:** This script securely encrypts and adds a new secret to the Ansible Secrets system. It automates creating a GPG-encrypted password file, using the correct GPG passphrase from Ansible Vault. The script eliminates common errors from manual typos or hidden characters.
 
@@ -17,8 +17,9 @@ This script is designed to be run from within the Ansible project directory.
 - Create the file /opt/ansible_secrets/add-secret.sh
 - Add the source code below to the file.
 - Make it executable. It should be owned by an administrator (e.g., flengyel).
+  
 ```bash
-sudo chown flengyel:"domain users" /opt/ansible_secrets/add-secret.sh
+sudo chown 'flengyel:domain users' /opt/ansible_secrets/add-secret.sh
 sudo chmod 750 /opt/ansible_secrets/add-secret.sh
 ```
 
@@ -95,6 +96,7 @@ if [[ -f "$OUTPUT_FILE" ]]; then
     fi
 fi
 
+
 # --- Main Logic ---
 
 echo "--> Activating virtual environment..."
@@ -136,7 +138,7 @@ deactivate
 echo "--> Done."
 ```
 
-**Usage:**
+### Usage
 
 Must be run from within the Ansible project directory
 
@@ -165,7 +167,6 @@ Before performing any actions, the script runs several critical checks:
 3. **Secure Prompt:** It securely prompts the administrator to enter the secret value, which is not displayed on the screen. It also ensures the provided secret is not empty.
 4. **Overwrite Protection:** If an encrypted file for that secret name already exists, the script asks for explicit confirmation before overwriting it.
 
-
 The script proceeds as follows:
 
 1. **Activate Environment:** It activates the Python virtual environment to ensure `ansible-vault` is available.
@@ -177,7 +178,7 @@ The script proceeds as follows:
 4. **Set Ownership:** Upon successful encryption, it uses `sudo` to set the new file's ownership to `service_account:appsecretaccess`, preparing it for deployment.
 5. **Deactivate Environment:** The script deactivates the virtual environment, cleaning up the session.
 
-## `secure-app.sh`
+### `secure-app.sh`
 
 **Purpose:** This script applies the standard production ownership (`service_account:appsecretaccess`) and permissions (`0750`) to an application script. It includes validation to ensure it is only run on `.sh` or `.py` files.
 
@@ -186,10 +187,8 @@ The script proceeds as follows:
 This is a general-purpose utility and should be placed in a system-wide binary path.
 
 - Create the file `/usr/local/bin/secure-app.sh`
-
 - Add the source code below to the file.
-
--Make it executable: 
+- Make it executable: 
 
 ```bash
 sudo chmod 755 /usr/local/bin/secure-app.sh
@@ -233,7 +232,7 @@ sudo chmod 0750 "$SCRIPT_PATH"
 
 echo "Done."
 
-**Usage**
+### Usage
 
 # Must be run by an administrator with sudo privileges.
 sudo /usr/local/bin/secure-app.sh /path/to/your/application_script.py
@@ -243,7 +242,7 @@ sudo /usr/local/bin/secure-app.sh /path/to/your/application_script.py
 
 These are the scripts and modules used by your application scripts at runtime to retrieve secrets and establish connections. They are installed in `/usr/local/lib/ansible_secret_helpers/` and `/usr/local/bin/`.
 
-## `secret_retriever.py`
+### `secret_retriever.py`
 
 **Purpose:** Provides the low-level `get_secret()` function for Python scripts to retrieve secrets. This is the foundation for the other helpers.
 
@@ -286,7 +285,7 @@ def get_secret(secret_name: str) -> str:
         raise RuntimeError("gpg command not found. Is GnuPG installed?")
 ```
 
-## `connection_helpers.py` 
+### `connection_helpers.py`
 
 **Purpose:** Provides high-level, reusable functions for establishing database and LDAP connections using secrets from the credential store. Your application scripts should prefer using these functions.
 
@@ -295,7 +294,6 @@ def get_secret(secret_name: str) -> str:
 - Create the file `/usr/local/lib/ansible_secret_helpers/connection_helpers.py`.
 - Add the source code below.
 - Set permissions: `sudo chmod 0640 /usr/local/lib/ansible_secret_helpers/connection_helpers.py`.
-
 
 **Source Code:**
 
@@ -385,7 +383,7 @@ def create_db_connection(dbhost, dbport, dbsid, user_secret, pswd_secret, engine
         sys.exit(1)
 ```
 
-## `get-secret.sh` (for Bash scripts)
+### `get-secret.sh` (for Bash scripts)
 
 **Purpose:** Takes a secret name as an argument and prints the decrypted secret to standard output.
 
