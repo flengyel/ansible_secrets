@@ -12,6 +12,39 @@ Ansible Secrets consists of three security components and relies on a specific d
 - Ansible Deployment Project (e.g., `/opt/ansible_secrets`). This is a self-contained administrative toolkit used **only** for the setup and maintenance of the secrets. It contains the Ansible playbook, the vault, and the source GPG-encrypted files. Your application scripts have no knowledge of, and will never interact with, this directory.
 - Runtime Secrets Directory (e.g., `/opt/credential_store`).This is the secure, permissions-restricted location on the server where the Ansible playbook places the necessaryfiles for runtime decryption. This is the **single point of interaction** for the application scripts when they need a password.
 
+```plaintext
+/
+├── opt/
+│   ├── ansible_secrets/      (Admin Toolkit: for deployment only)
+│   │   ├── ansible.cfg
+│   │   ├── deploy_secrets.yml
+│   │   ├── inventory
+│   │   ├── .ansible_vault_password
+│   │   ├── add-secret.sh         (Admin utility script)
+│   │   ├── files/
+│   │   │   └── *.txt.gpg         (Source GPG-encrypted secrets)
+│   │   ├── group_vars/
+│   │   │   └── all/
+│   │   │       └── vault.yml     (Ansible Vault with GPG passphrase)
+│   │   └── tasks/
+│   │       └── setup.yml
+│   │
+│   └── credential_store/       (Runtime Secrets: for application use)
+│       ├── .gpg_passphrase
+│       └── *.txt.gpg           (Deployed GPG-encrypted secrets)
+│
+└── usr/
+    └── local/
+        ├── bin/
+        │   ├── get_secret.sh     (Runtime helper for Bash)
+        │   └── secure-app.sh     (Admin utility script)
+        │
+        └── lib/
+            └── ansible_secret_helpers/ (Runtime helpers for Python)
+                ├── secret_retriever.py
+                └── connection_helpers.py
+```
+
 ### Security Components
 
 #### GPG Encryption
