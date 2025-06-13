@@ -609,4 +609,4 @@ sudo chown service_account:appsecretaccess getemplid.sh
 sudo chmod 0750 getemplid.sh
 ```
 
-See the `UTILITIES.md` guide for the `secure-app.sh` script to automate this task.
+See the `UTILITIES.md` guide for the `secure-app.sh` script to automate this task.  
