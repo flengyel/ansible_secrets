@@ -50,11 +50,11 @@ if [[ ! -f "$VENV_PATH" ]]; then
 fi
 
 # 3. Prompt for the secret password securely (it will not be echoed to the screen).
-read -sp "Enter the password for '${SECRET_NAME}': " SECRET_PASSWORD
+read -sp "Enter the secret for '${SECRET_NAME}': " SECRET
 echo # Print a newline for better formatting after the prompt.
 
-if [[ -z "$SECRET_PASSWORD" ]]; then
-    echo "Error: Password cannot be empty." >&2
+if [[ -z "$SECRET" ]]; then
+    echo "Error: Secret cannot be empty." >&2
     exit 1
 fi
 
@@ -88,7 +88,7 @@ echo "--> Encrypting new secret for '${SECRET_NAME}'..."
 # We pipe the secret password directly into GPG's standard input.
 # This avoids creating a temporary plaintext file on disk.
 # The '--passphrase' argument uses the variable we securely retrieved.
-printf '%s' "$SECRET_PASSWORD" | gpg --batch --yes --symmetric --cipher-algo AES256 \
+printf '%s' "$SECRET" | gpg --batch --yes --symmetric --cipher-algo AES256 \
     --passphrase "$GPG_PASSPHRASE" \
     --output "$OUTPUT_FILE"
 

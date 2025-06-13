@@ -1,4 +1,4 @@
-# /usr/local/lib/ansible_secret_helpers/connection_helpers.py
+`````````````````````````````````````````````````````````````````````````````# /usr/local/lib/ansible_secret_helpers/connection_helpers.py
 import sys
 import ssl
 import sqlalchemy
@@ -82,3 +82,4 @@ def create_db_connection(dbhost, dbport, dbsid, user_secret, pswd_secret, engine
             engine.dispose()
         sys.exit(1)
 
+`````````````````````````````````````````````````````````````````````````````
