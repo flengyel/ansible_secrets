@@ -1,6 +1,6 @@
 # Installation Guide: Secure Credential Management with GPG and Ansible Vault
 
-This guide will walk through the setup of the Ansible Secrets project, password (secret) encryption , the Ansible playbook for local deployment, and finally, the integration with Bash and Python scripts.
+This guide will walk through the setup of the Ansible Secrets project, secret encryption , the Ansible playbook for local deployment, and finally, the integration with Bash and Python scripts.
 
 **Placeholders Used in This Guide (REPLACE WITH YOUR ACTUAL VALUES):**
 
@@ -18,7 +18,42 @@ This guide will walk through the setup of the Ansible Secrets project, password 
   2. Access Group: `appsecretaccess`
   3. Admin User (you): `flengyel`
 
-## **Section 1: Initial Server Setup**
+## Directory Structure Diagram
+
+```plaintext
+/
+├── opt/
+│   ├── ansible_secrets/      (Admin Toolkit: for deployment only)
+│   │   ├── ansible.cfg
+│   │   ├── deploy_secrets.yml
+│   │   ├── inventory
+│   │   ├── .ansible_vault_password
+│   │   ├── add-secret.sh         (Admin utility script)
+│   │   ├── files/
+│   │   │   └── *.txt.gpg         (Source GPG-encrypted secrets)
+│   │   ├── group_vars/
+│   │   │   └── all/
+│   │   │       └── vault.yml     (Ansible Vault with GPG passphrase)
+│   │   └── tasks/
+│   │       └── setup.yml
+│   │
+│   └── credential_store/       (Runtime Secrets: for application use)
+│       ├── .gpg_passphrase
+│       └── *.txt.gpg           (Deployed GPG-encrypted secrets)
+│
+└── usr/
+    └── local/
+        ├── bin/
+        │   ├── get_secret.sh     (Runtime helper for Bash)
+        │   └── secure-app.sh     (Admin utility script)
+        │
+        └── lib/
+            └── ansible_secret_helpers/ (Runtime helpers for Python)
+                ├── secret_retriever.py
+                └── connection_helpers.py
+```
+
+## Section 1: Initial Server Setup
 
 These steps prepare the server environment with the necessary users, groups, and software.
 
@@ -27,7 +62,7 @@ These steps prepare the server environment with the necessary users, groups, and
 Run these commands on your RHEL server as a user with `sudo` privileges.
 
 ```bash
-# Create the dedicated service user (these are EAD accounts, but I suggest creating a local workstation account)
+# Create the dedicated service user
 sudo useradd --system --shell /sbin/nologin --comment "Service account for Bash and Python apps" service_account
 
 # Create the dedicated access group
@@ -71,50 +106,23 @@ source venv/bin/activate
 pip install ansible-core gnupg
 ```
 
-## **Section 2: Credential and Ansible Vault Preparation**
+## Section 2: Credential and Ansible Vault Preparation
 
-Now we'll prepare the encrypted secrets and the Ansible Vault to manage their decryption key.
+This section covers the creation of the Ansible Vault to protect the master GPG passphrase,  
+the installation of the `add-secret.sh` helper script, and finally, the secure creation of  
+your encrypted application secrets.
 
-### 2.1. Encrypt Your Application Passwords with GPG
+### 2.1. Prepare the Ansible Vault
 
-This is a one-time setup step for each password.
+First, we create the Ansible Vault. This encrypted file will hold the single GPG passphrase  
+that is used to encrypt all of your individual application secrets.
 
 ```bash
-# Ensure you are in your project directory and the venv is active
+# Ensure you are in the project root (/opt/ansible_secrets) and the venv is active
 cd /opt/ansible_secrets
+source venv/bin/activate
 
-# Create a subdirectory for the GPG files
-mkdir -p files
-cd files
-
-# Create the plaintext password files
-printf 'Green&DmP@swd!2025' > green_dm_secret.txt
-printf 'Yellow&DmP@swd!2025' > yellow_dm_secret.txt
-printf 'LdapR0nlyP@sswOrd' > ldap_ro_secret.txt
-printf 'S3cureOracle!P@ss' > oracle_db_secret.txt
-
-# Encrypt all three files using the SAME GPG passphrase
-GPG_PASSPHRASE='MyV3ryStr0ngGPGPassphr@s3'
-for f in *.txt; do
-  gpg --batch --yes --symmetric --cipher-algo AES256 \
-      --passphrase "$GPG_PASSPHRASE" "$f"
-done
-
-# Verify the .gpg files were created
-ls -l *.gpg
-
-# Securely delete the plaintext files
-shred --remove *.txt
-cd ..
-```
-
-You now have `green_dm_secret.txt.gpg`, `yellow_dm_secret.txt.gpg`, `ldap_ro_secret.txt.gpg`, and `oracle_db_secret.txt.gpg` in your `files/` subdirectory.
-
-## 2.2. Prepare the Ansible Vault
-
-```bash
-# Ensure you are in the project root (/opt/ansible_secrets)
-# Create the vault password file
+# Create the vault password file that protects the vault itself
 echo "MyUltraS3cureAnsibl3VaultP@ss" > .ansible_vault_password
 chmod 600 .ansible_vault_password
 
@@ -129,7 +137,134 @@ An editor will open. Enter the following content (this is your single GPG passph
 app_gpg_passphrase: "MyV3ryStr0ngGPGPassphr@s3"
 ```
 
-Save and close the file. It is now encrypted.
+Save and close the file.  The GPG passphrase is now securely stored inside the vault.
+
+### 2.2. Install the add-secret.sh Administrative Script
+
+This helper script automates the creation of new encrypted secrets by securely  
+retrieving the GPG passphrase from the Ansible Vault you just created.  
+
+- Create the file `/opt/ansible_secrets/add-secret.sh` and add the source code below.
+
+```bash
+#!/bin/bash
+#
+# add-secret.sh - A script to securely encrypt and add a new secret
+# to the Ansible Secrets project.
+
+set -euo pipefail
+
+# --- Configuration ---
+ANSIBLE_PROJECT_DIR="/opt/ansible_secrets"
+FILES_DIR="${ANSIBLE_PROJECT_DIR}/files"
+VAULT_FILE="${ANSIBLE_PROJECT_DIR}/group_vars/all/vault.yml"
+VENV_PATH="${ANSIBLE_PROJECT_DIR}/venv/bin/activate"
+
+
+# --- Input Validation ---
+if [[ $# -ne 1 ]]; then
+    echo "Usage: $0 <secret_name>" >&2
+    echo "Example: $0 oracle_db" >&2
+    exit 1
+fi
+
+SECRET_NAME="$1"
+OUTPUT_FILE="${FILES_DIR}/${SECRET_NAME}_secret.txt.gpg"
+
+if [[ ! -d "$ANSIBLE_PROJECT_DIR" || ! -f "$VAULT_FILE" || ! -f "$VENV_PATH" ]]; then
+    echo "Error: Required project files or directories not found in '$ANSIBLE_PROJECT_DIR'." >&2
+    exit 1
+fi
+
+read -sp "Enter the secret for '${SECRET_NAME}': " SECRET
+echo
+
+if [[ -z "$SECRET" ]]; then
+    echo "Error: Secret cannot be empty." >&2
+    exit 1
+fi
+
+if [[ -f "$OUTPUT_FILE" ]]; then
+    read -p "Warning: '${OUTPUT_FILE}' already exists. Overwrite? (y/N) " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo "Operation cancelled."
+        exit 1
+    fi
+fi
+
+
+# --- Main Logic ---
+echo "--> Activating virtual environment..."
+source "$VENV_PATH"
+
+echo "--> Retrieving GPG passphrase securely from Ansible Vault..."
+GPG_PASSPHRASE=$(ansible-vault view "$VAULT_FILE" | grep 'app_gpg_passphrase:' | awk '{printf "%s", $2}' | tr -d \''"')
+
+if [[ -z "$GPG_PASSPHRASE" ]]; then
+    echo "Error: Failed to retrieve GPG passphrase from vault. Check vault password or file content." >&2
+    exit 1
+fi
+
+echo "--> Encrypting new secret for '${SECRET_NAME}'..."
+printf '%s' "$SECRET" | gpg --batch --yes --symmetric --cipher-algo AES256 \
+    --passphrase "$GPG_PASSPHRASE" \
+    --output "$OUTPUT_FILE"
+
+if [[ $? -eq 0 ]]; then
+    echo "✅ Success! Encrypted secret saved to: ${OUTPUT_FILE}"
+    sudo chown service_account:appsecretaccess "$OUTPUT_FILE"
+    echo "--> Ownership set to service_account:appsecretaccess"
+else
+    echo "❌ Error: GPG encryption failed." >&2
+    exit 1
+fi
+
+deactivate
+echo "--> Done."
+```
+
+- Make the script executable and set the correct ownership for an administrator.
+
+```bash
+sudo chown 'flengyel:domain users' /opt/ansible_secrets/add-secret.sh
+sudo chmod 750 /opt/ansible_secrets/add-secret.sh
+```
+
+### 2.3. Create Encrypted Secrets Using the Helper Script
+
+Now, with the vault and helper script in place, you can securely create an encrypted file for each of your application secrets.
+
+```bash
+# Ensure you are in the project root and the venv is active
+cd /opt/ansible_secrets
+source venv/bin/activate
+
+# Create the subdirectory for the GPG files if it doesn't exist
+mkdir -p files
+
+# Now, use the helper script to create each secret.
+# The script will prompt you for the secret value securely.
+# NOTE: the values below are examples only.
+
+echo "Creating LDAP DM secret..."
+./add-secret.sh ldap_dm
+# --> Enter 'Ldap&DmP@sswOrd!2025' when prompted
+
+echo "Creating LDAP RO secret..."
+./add-secret.sh ldap_ro
+# --> Enter 'LdapR0nlyP@sswOrd' when prompted
+
+echo "Creating Oracle DB secret..."
+./add-secret.sh oracle_db
+# --> Enter 'S3cureOracle!P@ss' when prompted
+
+# Deactivate the environment when finished creating secrets
+deactivate
+```
+
+After running these commands, verify that your encrypted files (e.g., `ldap_dm_secret.txt.gpg`)  
+have been created in the `/opt/ansible_secrets/files/` directory.
 
 ## Section 3: Ansible Configuration and Playbook
 
@@ -262,69 +397,62 @@ total 12
 
 ## Section 5: Script Integration and Runtime Operation
 
-Here is how your scripts can securely access the passwords. It's best to create a reusable function or helper script.
+This section details how your application scripts can securely access secrets at runtime. The project provides reusable helper scripts for both Bash and Python.
 
-### 5.1. Reusable Bash Script (`get_secret.sh`)
+### 5.1. Reusable Bash Script (get_secret.sh)
 
-This script will take a "secret name" (like `oracle_db`) and print its password to standard output.
+For Bash scripts, the get_secret.sh utility is the standard method for retrieving any secret. It takes a single argument—the name of the secret—and prints its value to standard output.
 
-- Create `/usr/local/bin/get_secret.sh`:
+**Installation:**
 
-``` bash
-#!/usr/bin/env bash
-set -euo pipefail
+- Create the file /usr/local/bin/get_secret.sh.
+- Add the following source code to the file:
+  
+  ```bash
+  #!/usr/bin/env bash
+  set -euo pipefail
 
-if [[ $# -ne 1 ]]; then
-    echo "Usage: $0 <secret_name>" >&2
-    echo "Example: $0 oracle_db" >&2
-    exit 1
-fi
+  if [[ $# -ne 1 ]]; then
+      echo "Usage: $0 <secret_name>" >&2
+      echo "Example: $0 oracle_db" >&2
+      exit 1
+  fi
 
-SECRET_NAME="$1"
-SECRETS_DIR="/opt/credential_store"
-ENC_FILE="${SECRETS_DIR}/${SECRET_NAME}_secret.txt.gpg"
-GPG_PASSPHRASE_FILE="${SECRETS_DIR}/.gpg_passphrase"
+  SECRET_NAME="$1"
+  SECRETS_DIR="/opt/credential_store"
+  ENC_FILE="${SECRETS_DIR}/${SECRET_NAME}_secret.txt.gpg"
+  GPG_PASSPHRASE_FILE="${SECRETS_DIR}/.gpg_passphrase"
 
-if [[ ! -r "$ENC_FILE" ]]; then
-    echo "Error: Encrypted secret for '${SECRET_NAME}' not found or not readable." >&2
-    exit 1
-fi
+  if [[ ! -r "$ENC_FILE" ]]; then
+      echo "Error: Encrypted secret for '${SECRET_NAME}' not found or not readable." >&2
+      exit 1
+  fi
 
-# Decrypt and print the password to stdout
-gpg --batch --quiet --yes \
-    --passphrase-file "$GPG_PASSPHRASE_FILE" \
-    --decrypt "$ENC_FILE" 2>/dev/null
-```
+  # Decrypt and print the password to stdout
+  gpg --batch --quiet --yes \
+      --passphrase-file "$GPG_PASSPHRASE_FILE" \
+      --decrypt "$ENC_FILE" 2>/dev/null
+  ```
 
-- Set its permissions:
+- Set its ownership and permissions:
 
 ```bash
 sudo chown service_account:appsecretaccess /usr/local/bin/get_secret.sh
-sudo chmod 0750 /usr/local/bin/get_secret.sh # Owner rwx, Group rx
+sudo chmod 0750 /usr/local/bin/get_secret.sh
 ```
 
-- **How to use it in another Bash script:**
+## 5.2. Reusable Python Modules
 
-``` bash
-#!/bin/bash
-# Get the Oracle password into a variable
-ORACLE_PASS=$(/usr/local/bin/get_secret.sh oracle_db)
-if [[ -z "$ORACLE_PASS" ]]; then
-    echo "Failed to retrieve Oracle password." >&2
-    exit 1
-fi
+For Python applications, a two-layer helper system is provided. Applications can use the low-level get_secret() function for direct access to any secret, but the high-level connection_helpers module is the recommended approach for database and LDAP connections.
 
-echo "Successfully retrieved Oracle password of length ${#ORACLE_PASS}"
-# Now use $ORACLE_PASS to connect to the database
-# ...
-unset ORACLE_PASS # Clean up
-```
+### Layer 1: Foundational get_secret() Function
 
-### 5.2. Reusable Python Module (`secret_retriever.py`)
+The get_secret() function, contained in the secret_retriever.py module, is the core component for fetching any secret's value as a string.
 
-This module provides a function to get secrets.
+**Installation:**
 
-- Create `/usr/local/lib/ansible_secret_helpers/secret_retriever.py` (ensure `/usr/local/lib/ansible_secret_helpers` is in your `PYTHONPATH` or your script is in the same dir).
+Create the file /usr/local/lib/ansible_secret_helpers/secret_retriever.py.
+Add the following source code:
 
 ```python
 # /usr/local/lib/ansible_secret_helpers/secret_retriever.py
@@ -361,71 +489,90 @@ def get_secret(secret_name: str) -> str:
         raise RuntimeError("gpg command not found. Is GnuPG installed?")
 ```
 
-- Set its permissions:
+### Layer 2: Recommended `connection_helpers.py` Module
 
-```bash
-sudo mkdir -p /usr/local/lib/ansible_secret_helpers
-sudo chown service_account:appsecretaccess /usr/local/lib/ansible_secret_helpers/secret_retriever.py
-sudo chmod 0640 /usr/local/lib/ansible_secret_helpers/secret_retriever.py # Owner rw, Group r
-```
+This high-level module provides pre-built functions like create_db_connection() and create_ldap_connection(). It uses secret_retriever.py internally and is the best practice for connecting to services.
 
-- **How to use it in another Python script:**
+**Installation:**
+
+Create the file /usr/local/lib/ansible_secret_helpers/connection_helpers.py.
+Add the following source code:
 
 ```python
-How to use it in another Python script (Improved Example):
-
-This example demonstrates a more robust integration pattern based on a real-world script. It shows how to retrieve a secret and use it to connect to a database within a structured application.
-
-#!/usr/bin/env python3
-import csv
+# /usr/local/lib/ansible_secret_helpers/connection_helpers.py
+import sys
+import ssl
 import sqlalchemy
 import cx_Oracle as cx
-import argparse as arg
-import sys
-import os
+from ldap3 import Server, Connection, ALL, Tls # Requires ldap3 library
+import secret_retriever # Imports the local module
 
-# --- Start: Required code block for secret retrieval ---
-# Define the path to the helper library.
-HELPER_LIB_PATH = "/usr/local/lib/ansible_secret_helpers"
-
-# Add the path to the system path list so Python can find the module.
-# This makes the script work reliably from anywhere (including cron).
-if HELPER_LIB_PATH not in sys.path:
-    sys.path.append(HELPER_LIB_PATH)
-
-try:
-    # Now that the path is set, the import will succeed.
-    import secret_retriever
-except ImportError:
-    print(f"CRITICAL ERROR: Could not import 'secret_retriever'.", file=sys.stderr)
-    print(f"Ensure '{HELPER_LIB_PATH}' exists and is readable.", file=sys.stderr)
-    sys.exit(1)
-# --- End: Required code block ---
-
-
-def create_secure_connection(dbhost, dbport, dbsid, secret_name, user):
+def create_ldap_connection(ldap_server, user_secret, pswd_secret):
     """
-    Retrieves a password from the credential store and creates a DB connection.
-    Returns a tuple of (engine, connection).
+    Retrieves credentials and establishes a secure LDAP connection.
+    Returns a bound ldap3 Connection object.
     """
-    db_password = None
+    oud_user = None
+    oud_pswd = None
+    try:
+        oud_user = secret_retriever.get_secret(user_secret)
+        oud_pswd = secret_retriever.get_secret(pswd_secret)
+
+        tls = Tls(validate=ssl.CERT_NONE)
+        srv = Server(ldap_server, port=636, get_info=ALL, use_ssl=True, tls=tls)
+        oud = Connection(srv, user=oud_user, password=oud_pswd, auto_bind=True)
+
+        # Clear credentials from memory immediately after use
+        oud_user = None
+        oud_pswd = None
+
+        if not oud.bound:
+            # Use the correct server variable in the error message
+            raise ConnectionError(f'Error: cannot bind to {ldap_server}')
+
+        # Return the connection object only on success
+        return oud
+
+    except Exception as e:
+        # Properly handle exceptions and exit
+        print(f"Error creating LDAP connection: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+def create_db_connection(dbhost, dbport, dbsid, user_secret, pswd_secret, engine_only=False):
+    """
+    Retrieves credentials and creates a DB engine and optionally a connection.
+    - If engine_only is True, returns only the SQLAlchemy engine.
+    - If engine_only is False (default), returns a tuple of (engine, connection).
+    """
+    db_user = None
+    db_pswd = None
     engine = None
     conn = None
     try:
-        # Retrieve the specified password using the helper function
-        db_password = secret_retriever.get_password(secret_name)
-        if not db_password:
-            raise RuntimeError(f"Retrieved empty password for '{secret_name}'")
+        db_user = secret_retriever.get_secret(user_secret)
+        if not db_user:
+            raise RuntimeError(f"Retrieved empty username secret for '{user_secret}'")
+
+        db_pswd = secret_retriever.get_secret(pswd_secret)
+        if not db_pswd:
+            raise RuntimeError(f"Retrieved empty password for '{pswd_secret}'")
 
         datasourcename = cx.makedsn(dbhost, dbport, service_name=dbsid)
-        connectstring = f'oracle+cx_oracle://{user}:{db_password}@{datasourcename}'
+        connectstring = f'oracle+cx_oracle://{db_user}:{db_pswd}@{datasourcename}'
 
-        # Clear the plaintext password from memory as soon as it's used
-        db_password = None
+        # Clear credentials from memory immediately after use
+        db_user = None
+        db_pswd = None
 
         engine = sqlalchemy.create_engine(connectstring, max_identifier_length=128)
-        conn = engine.connect()
-        return engine, conn
+
+        # Conditional return based on the new flag
+        if engine_only:
+            return engine
+        else:
+            conn = engine.connect()
+            return engine, conn
 
     except Exception as e:
         print(f"Error creating database connection: {e}", file=sys.stderr)
@@ -434,59 +581,26 @@ def create_secure_connection(dbhost, dbport, dbsid, secret_name, user):
             conn.close()
         if engine:
             engine.dispose()
-        sys.exit(1) # Exit with an error code
-
-
-def main():
-    """Main execution logic"""
-    parser = arg.ArgumentParser(description="Check password reset status for a given EMPLID.")
-    parser.add_argument('emplid', type=str, help='Search for a specific EMPLID.')
-    args = parser.parse_args()
-
-    dbhost = 'IAMPRDDB1.cuny.edu'
-    dbport = '2483'
-    dbsid = 'PDIMOIG_HUD'
-    db_user = 'flengyel' # This username could also be stored as a secret
-    secret_name_for_db = 'oig_db' # The name of the secret to fetch
-
-    engine, conn = None, None
-    try:
-        # Establish the secure connection
-        engine, conn = create_secure_connection(dbhost, dbport, dbsid, secret_name_for_db, db_user)
-        print(f"Successfully connected to {dbsid} as {db_user}.")
-
-        # --- Your application logic starts here ---
-        where_clause = f" WHERE U.USR_EMP_NO = '{args.emplid}'"
-        count_statement = 'SELECT COUNT(*) FROM GREEN_OIM.PWH P INNER JOIN GREEN_OIM.USR U ON P.USR_KEY = U.USR_KEY' + where_clause
-
-        count_result = conn.execute(count_statement).scalar()
-        if count_result == 0:
-            print(f"User {args.emplid} must reset their password.")
-        else:
-            print(f"OIM can sync password for {args.emplid}")
-
-        # ... add other queries here ...
-
-    finally:
-        # Ensure the connection is always closed
-        if conn:
-            conn.close()
-        if engine:
-            engine.dispose()
-        print("Execution finished. Database connection closed.")
-
-if __name__ == "__main__":
-    main()
-
+        sys.exit(1)
 ```
+
+Set Permissions for All Python Helpers:
+Run these commands once to set up the directory and secure both Python helper modules.
+
+```bash
+sudo mkdir -p /usr/local/lib/ansible_secret_helpers
+sudo chown service_account:appsecretaccess /usr/local/lib/ansible_secret_helpers/*.py
+sudo chmod 0640 /usr/local/lib/ansible_secret_helpers/*.py
+```
+
 
 ## Section 6: App script ownership and permissions
 
 This is the recommended ownership and permission model for production Python and bash scripts:
 
-- Owner: service_account
-- Group: appsecretaccess
-- Permissions: 0750 (-rwxr-x---)
+- Owner: `service_account`
+- Group: `appsecretaccess`
+- Permissions: `0750 (-rwxr-x---)`
 
 Here are the ownership and permission mode commands for scripts used with Ansible Secrets. The script in this example is `getemplid.sh`, however, the commands below apply to Python scripts as well.
 
@@ -494,3 +608,5 @@ Here are the ownership and permission mode commands for scripts used with Ansibl
 sudo chown service_account:appsecretaccess getemplid.sh
 sudo chmod 0750 getemplid.sh
 ```
+
+See the `UTILITIES.md` guide for the `secure-app.sh` script to automate this task.
