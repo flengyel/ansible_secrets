@@ -1,18 +1,111 @@
-# Example cronjob
+# Using Ansible Secrets in a Cron Job
 
-1. **User Context:** The `crontab -l` output shows that these jobs run as user, `flengyel`. For the system to work, the `flengyel` user must be a member of the `appsecretaccess` group and must have logged in at least once since being added to that group.
-2. **Execution Flow:** The execution flow is `cronjob -> wrapper_script.sh -> python_script.py`. The wrapper script sets up the environment (`LD_LIBRARY_PATH`, virtual environment activation) before executing the main logic.
-3. **The Target:** The `cunyfirst.py` script, with its hardcoded line `constr = 'oracle+cx_oracle://flengyel:this is a big secret' + datasrc`, is the part we will now secure.
+This document shows how to modify a Python script to use the Ansible Secrets system when scheduled for exection `cron`.
 
-The wrapper script, `dailyoim_venv.sh`, needs **no changes**. Its job is to set up the environment, which it already does correctly.
+## Example
 
-## **How to Modify `cunyfirst.py` to Use the Credential Store**
+A Python script, `cunyfirst.py`, runs nightly via `cron` to generate a report from an Oracle database. This script requires a database username and password. The goal is to remove the hardcoded password from the script and retrieve it securely from the credential store.
 
-We will modify `cunyfirst.py` to call the reusable Python helper module (`secret_retriever.py`) to fetch the Oracle password at runtime.
+The execution flow involves three components:
 
-Here is the "before and after" of your `cunyfirst.py` script.
+1. **The `cron` Entry**: Schedules the task to run at a specific time.
+2. **The Wrapper Script**: A Bash script that sets up the necessary environment for the Python script.
+3. **The Python Script**: The application that performs the main logic.
 
-### **Original `cunyfirst.py` (Relevant Part)**
+### 1. The Cron Job Entry
+
+The role of `cron` executes the wrapper script at the scheduled time. All logic for logging and notifications should be handled within the wrapper script. 
+
+Here is the recommended `crontab` entry:
+
+```bash
+# Run the daily OIM report job at 1:00 AM
+00 1 * * * /ims/cunyfirst/dailyoim_venv.sh
+```
+
+This entry, owned by the `flengyel` user, executes the wrapper script once per day. The user running the cron job must be a member of the `appsecureaccess` group on the local machine (see `INSTALLATION` for details).  
+
+### 2. The Wrapper Script (`dailyoim_venv.sh`)
+
+A wrapper script is essential when running complex applications from `cron`, which provides a minimal, non-interactive shell environment. The wrapper's job is to prepare the environment before running the main application.
+
+The script below performs several actions:
+
+* Sets the `LD_LIBRARY_PATH` required by the Oracle client.
+* Changes to the correct working directory.
+* Sources the Python `venv` to activate the isolated environment.
+* Redirects all output (`stdout` and `stderr`) from the entire process to a log file.
+* Executes the Python script.
+* Upon completion, it emails the log file to a recipient, providing a complete record of the run.
+
+```bash
+#!/usr/bin/env bash
+
+# Wrapper script to set up environment and run the cunyfirst.py report
+
+# --- Configuration ---
+LOG_FILE="/var/log/cunyfirst_report.log"
+EMAIL_RECIPIENT="florian.lengyel@cuny.edu"
+EMAIL_SUBJECT="Daily OIM Report"
+APP_DIR="/ims/cunyfirst"
+
+# --- Main Logic ---
+# Change to the application directory
+cd "$APP_DIR" || { echo "Cannot cd to $APP_DIR" >> "$LOG_FILE"; exit 1; }
+
+# Redirect all subsequent output (stdout and stderr) to the log file
+exec &> "$LOG_FILE"
+
+echo "---"
+echo "Job started at: $(date)"
+echo "---"
+
+# Set up the Oracle environment
+export LD_LIBRARY_PATH=/usr/lib/oracle/19.19/client64/lib
+
+# Activate the Python virtual environment
+source bin/activate
+
+# Execute the main Python script
+./cunyfirst.py
+PY_EXIT_CODE=$?
+
+if [[ $PY_EXIT_CODE -ne 0 ]]; then
+    echo "---"
+    echo "ERROR: Python script exited with code $PY_EXIT_CODE."
+fi
+
+# Example of conditional logic from original script
+if [ "19-Feb-25" == "$(date +%d-%b-%y)" ]; then
+    echo "Appending special report..."
+    cat ./johnrayvargas_oim_usr_report.txt >> ./daily_oim_usr_report.txt
+fi
+
+# SFTP transfer logic
+echo "---"
+echo "Starting SFTP transfer..."
+sftp -i /home/flengyel/.ssh/IMS_SvcAcct -oBatchMode=no -b - IMS_SvcAcct@st-edge.cuny.edu << !
+  cd CUNY_IMS
+  put daily_oim_usr_report.txt
+  ls -l
+  bye
+!
+echo "SFTP transfer finished."
+echo "---"
+echo "Job finished at: $(date)"
+echo "---"
+
+# Send the log file as an email notification
+cat "$LOG_FILE" | s-nail -s "$EMAIL_SUBJECT" "$EMAIL_RECIPIENT"
+
+exit 0
+```
+
+### 3. Securing the Python Script (`cunyfirst.py`)
+
+The final step is to modify the Python script to remove the hardcoded password and use the `connection_helpers` module.
+
+#### Original `cunyfirst.py` 
 
 ```python
 # ... imports ...
@@ -20,16 +113,17 @@ dbhost = 'IAMPRDDB1.cuny.edu'
 dbport = '2483'
 dbsid  = 'PDIMOIG_HUD'
 datasrc = cx.makedsn(dbhost, dbport,service_name = dbsid)
+
 # This line contains the hardcoded secret password
-constr  = 'oracle+cx_oracle://flengyel:this is a big secret' + datasrc
+constr  = 'oracle+cx_oracle://plaintext_db_username:plaintext_password' + datasrc
 
 engine = sqlalchemy.create_engine(constr,  max_identifier_length=128)
 # ... rest of script ...
- ```
+```
 
-### **Revised `cunyfirst.py` (Secure Version)**
+#### Revised `cunyfirst.py`
 
-This version dynamically fetches the password from the credential store.
+This version uses the recommended helper module to securely establish the database connection.
 
 ```python
 #!/usr/bin/env python3
@@ -39,75 +133,56 @@ import sqlalchemy
 import cx_Oracle as cx
 import sys
 
-# --- Start of modifications for secure password handling ---
-
-# Add the shared helper library's parent directory to Python's path
-# This makes the 'import secret_retriever' call work reliably in cron.
+# --- Start: Required code block for secret retrieval ---
 HELPER_LIB_PATH = "/usr/local/lib/ansible_secret_helpers"
 if HELPER_LIB_PATH not in sys.path:
     sys.path.append(HELPER_LIB_PATH)
 
 try:
-    import secret_retriever
-    except ImportError:
-# A clear error message is crucial for debugging cronjobs
-        print(f"CRITICAL ERROR: Could not import secret_retriever from {HELPER_LIB_PATH}. Check path and permissions.", file=sys.stderr)
-        sys.exit(1)
-
-try:
-# Retrieve the 'oracle_db' password using the helper function
-    oracle_password = secret_retriever.get_password("oracle_db")
-    if not oracle_password:
-        raise RuntimeError("Retrieved empty password from credential store.")
-except Exception as e:
-    print(f"CRITICAL ERROR: Failed to retrieve Oracle DB password. Error: {e}", file=sys.stderr)
+    # Import the high-level helper, which is the recommended approach
+    from connection_helpers import create_db_connection
+except ImportError:
+    print(f"CRITICAL ERROR: Could not import helper modules from {HELPER_LIB_PATH}. Check path and permissions.", file=sys.stderr)
     sys.exit(1)
+# --- End of required code block ---
 
-# --- End of modifications ---
 
+# --- Database Connection Details ---
 dbhost = 'IAMPRDDB1.cuny.edu'
 dbport = '2483'
 dbsid  = 'PDIMOIG_HUD'
+# Define the names of the secrets to be used for the connection.
+user_secret = 'cunyfirst_user' # The name of the secret for the username
+pswd_secret = 'oracle_db'      # The name of the secret for the password
 
-datasrc = cx.makedsn(dbhost, dbport,service_name = dbsid)
 
-# Dynamically construct the connection string using the retrieved password
-# The username 'flengyel' is still here. This could also be managed as a secret if needed.
-constr = f'oracle+cx_oracle://flengyel:{oracle_password}@{datasrc}'
+# --- Main Logic ---
+engine, conn = None, None
+try:
+    # Use the helper function to securely create the database connection.
+    # It handles secret retrieval and connection string creation internally.
+    engine, conn = create_db_connection(
+        dbhost, dbport, dbsid, user_secret, pswd_secret
+    )
+    
+    stmt  = "SELECT DISTINCT "
+    stmt += "REST OF SQL NOT SHOWN "
+    
+    result = conn.execute(sqlalchemy.text(stmt))
+    
+    # Use a 'with' block for file handling to ensure it closes automatically
+    with open('daily_oim_usr_report.txt', 'w', newline='') as fh:
+        outcsv = csv.writer(fh, delimiter='\t')
+        outcsv.writerows(result)
 
-# As a security measure, clear the plaintext password from memory as soon as it's used.
-oracle_password = None
+except Exception as e:
+    print(f"CRITICAL ERROR: An error occurred during script execution. Error: {e}", file=sys.stderr)
+    sys.exit(1)
 
-# print(constr) # For debugging, do not leave uncommented
-
-engine = sqlalchemy.create_engine(constr,  max_identifier_length=128)
-conn = engine.connect()
-
-stmt  = "SELECT DISTINCT "
-stmt += "REST OF SQL NOT SHOWN "
-
-result = conn.execute(stmt)
-
-fh = open('daily_oim_usr_report.txt', 'w')
-outcsv = csv.writer(fh, delimiter='\t')
-
-outcsv.writerows(result)
-
-fh.close()
-# Corrected: close() is a method call
-conn.close()
-engine.dispose()
+finally:
+    # Ensure database resources are always released
+    if conn:
+        conn.close()
+    if engine:
+        engine.dispose()
 ```
-
-## **Summary of How It Works with Your Cronjob**
-
-1. At 1:00 AM, `cron` runs `/ims/cunyfirst/dailyoim_venv.sh` as the user `flengyel`.
-2. The wrapper script (`dailyoim_venv.sh`) sets `LD_LIBRARY_PATH`, changes directory, and activates the Python virtual environment.
-3. It then executes the **modified** `cunyfirst.py` script.
-4. The Python script, now running as `flengyel` (who is a member of `appsecretaccess`), executes the `secret_retriever.get_password("oracle_db")` function.
-5. This function reads the GPG passphrase from `/opt/credential_store/.gpg_passphrase` and uses it to decrypt `/opt/credential_store/oracle_db_password.txt.gpg`.
-6. The decrypted password is returned and used to build the `sqlalchemy` connection string.
-7. The script connects to the Oracle database and proceeds as before.
-
-   This integration is seamless and requires no changes to the cron schedule or wrapper scripts.
-   The only change is making the Python script itself responsible for securely fetching the credentials it needs.
