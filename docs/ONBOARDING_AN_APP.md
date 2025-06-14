@@ -157,3 +157,142 @@ Example for a file named /`etc/cron.d/my-oracle-report`:
 ```
 
 This entry specifies the schedule, the user (`service_account`), the full command to run, and logging redirection.  
+
+
+### Example: Converting a Bash LDAP Script to Python
+
+This example shows how to convert a Bash script that performs a simple LDAP query into a Python script that uses the high-level `create_ldap_connection()` helper.
+
+#### Before: Bash Script (`getemplid.sh`)
+
+This script securely retrieves credentials and uses the command-line tool `ldapsearch` to find a user's EMPLID.
+
+```bash
+#!/bin/bash
+#
+# Resolves a CUNY Login ID to an EMPLID by querying the LDAP directory.
+# Accepts either a CUNY Login ID or an 8-digit EMPLID as input.
+
+set -euo pipefail
+
+# This function will be called automatically on script exit (due to 'trap')
+# to ensure credentials are always cleared from memory.
+cleanup() {
+    unset ADMIN
+    unset PSWD
+}
+
+# Trap ensures the cleanup function is called on EXIT, HUP, INT, QUIT, TERM signals.
+trap cleanup EXIT HUP INT QUIT TERM
+
+# --- Retrieve Secrets ---
+ADMIN=$(/usr/local/bin/get_secret.sh ldap_mgr)
+if [[ -z "$ADMIN" ]]; then
+    echo "Error: Failed to retrieve LDAP manager username." >&2
+    exit 1
+fi
+
+PSWD=$(/usr/local/bin/get_secret.sh green_dm)
+if [[ -z "$PSWD" ]]; then
+    echo "Error: Failed to retrieve LDAP manager password." >&2
+    exit 1
+fi
+
+
+# --- Main Logic ---
+OUD="ldaps://dsprod-dc1.cuny.edu:636"
+BASEDN="CN=users,dc=cuny,dc=edu"
+CACERT="/etc/pki/tls/cuny.edu.pem"
+
+# Check if the first argument looks like an 8-digit EMPLID.
+# If it does, just print it back out.
+if [[ "$1" =~ ^[0-9]{8}$ ]]; then
+    echo "$1"
+    exit 0
+fi
+
+# If it's not an EMPLID, assume it's a login ID and query LDAP.
+LOGIN_ID="$1"
+
+# The ldapsearch command now uses safely quoted variables.
+EMPLID_RESULT=$(LDAPTLS_CACERT=$CACERT \
+    ldapsearch -LLL -x -H "$OUD" -D "$ADMIN" -w "$PSWD" -b "$BASEDN" -s sub "(uid=$LOGIN_ID)" cunyEduEmplID | \
+    grep 'cunyEduEmplID:' | \
+    sed 's/cunyEduEmplID: //')
+
+# The 'unset' commands are now handled by the 'trap' and are not needed here.
+
+echo "$EMPLID_RESULT"
+```
+
+#### After: Python Script (`get_emplid.py`)
+
+This Python version accomplishes the same task but uses the `connection_helpers` module. It handles argument parsing with the `argparse` library and uses the `ldap3` library for the search.
+
+```python
+#!/usr/bin/env python3
+
+import sys
+import argparse
+import re
+
+# --- Start: Required code block for secret retrieval ---
+HELPER_LIB_PATH = "/usr/local/lib/ansible_secret_helpers"
+if HELPER_LIB_PATH not in sys.path:
+    sys.path.append(HELPER_LIB_PATH)
+try:
+    # Import the specific, high-level helper you need
+    from connection_helpers import create_ldap_connection
+except ImportError:
+    print(f"CRITICAL: Could not import helper modules from {HELPER_LIB_PATH}.", file=sys.stderr)
+    sys.exit(1)
+# --- End: Required code block ---
+
+
+def main():
+    """Main execution function"""
+    parser = argparse.ArgumentParser(
+        description="Resolves a CUNY Login ID to an EMPLID by querying the LDAP directory."
+    )
+    parser.add_argument("identifier", help="A CUNY Login ID or an 8-digit EMPLID.")
+    args = parser.parse_args()
+
+    # If the input is already an 8-digit EMPLID, just print it and exit.
+    if re.fullmatch(r'\d{8}', args.identifier):
+        print(args.identifier)
+        sys.exit(0)
+
+    login_id = args.identifier
+    ldap_conn = None
+    try:
+        # Use the helper to establish a secure, authenticated LDAP connection.
+        ldap_conn = create_ldap_connection(
+            "dsprod-dc1.cuny.edu", "ldap_mgr", "green_dm"
+        )
+        
+        # Perform the LDAP search
+        ldap_conn.search(
+            search_base='CN=users,dc=cuny,dc=edu',
+            search_filter=f'(uid={login_id})',
+            attributes=['cunyEduEmplID']
+        )
+
+        # Process the response
+        if ldap_conn.response:
+            emplid = ldap_conn.response[0]['attributes'].get('cunyEduEmplID', [None])[0]
+            if emplid:
+                print(emplid)
+
+    except Exception as e:
+        print(f"An error occurred during the LDAP query: {e}", file=sys.stderr)
+    
+    finally:
+        # Ensure the LDAP connection is always closed.
+        if ldap_conn:
+            ldap_conn.unbind()
+
+
+if __name__ == "__main__":
+    main()
+```
+

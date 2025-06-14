@@ -1,6 +1,6 @@
 # Ansible Secrets
 
-Ansible Secrets provides encrypted passwords (LDAP Directory Manager, LDAP read-only, Oracle DB) to Bash and Python scripts without exposing those passwords in plaintext.
+Ansible Secrets provides encrypted secrets (e.g., account usernames, account passwords, and other sensitive data) to Bash and Python scripts without exposing those secrets in plaintext.
 
 ## System Components and Directory Structure
 
@@ -8,9 +8,9 @@ Ansible Secrets consists of three security components and relies on a specific d
 
 ### Directory Definitions
 
-- Application project directories contain the Bash and Python scripts to protect. Those scripts will consume the passwords at runtime but will never contain them.
+- Application project directories contain the Bash and Python scripts to protect. Those scripts will consume the secrets at runtime but will never contain them.
 - Ansible Deployment Project (e.g., `/opt/ansible_secrets`). This is a self-contained administrative toolkit used **only** for the setup and maintenance of the secrets. It contains the Ansible playbook, the vault, and the source GPG-encrypted files. Your application scripts have no knowledge of, and will never interact with, this directory.
-- Runtime Secrets Directory (e.g., `/opt/credential_store`).This is the secure, permissions-restricted location on the server where the Ansible playbook places the necessaryfiles for runtime decryption. This is the **single point of interaction** for the application scripts when they need a password.
+- Runtime Secrets Directory (e.g., `/opt/credential_store`).This is the secure, permissions-restricted location on the server where the Ansible playbook places the necessary files for runtime decryption. This is the **single point of interaction** for the application scripts when they need a secret.
 
 ```plaintext
 /
@@ -49,15 +49,15 @@ Ansible Secrets consists of three security components and relies on a specific d
 
 #### GPG Encryption
 
-This component provides confidentiality for your application passwords. Each password is encrypted with GPG(AES-256 cipher) and the resulting file (e.g., `oracle_db_password.txt.gpg`) is stored in the**Runtime Secrets Directory**. A single, strong GPG passphrase is used to encrypt the password files.
+This component provides confidentiality for your application secrets. Each secret is encrypted with GPG(AES-256 cipher) and the resulting file (e.g., `oracle_db_password.txt.gpg`) is stored in the**Runtime Secrets Directory**. A single, strong GPG passphrase is used to encrypt the secrets files.
 
 #### Ansible Vault
 
-This component protects the GPG passphrase. The passphrase--which is the key to unlock all the application passwords--is stored in an encrypted Ansible Vault file that resides within the **Ansible Deployment Project** directory.Access to this vault is controlled by a separate Vault password known only to the administrator.
+This component protects the GPG passphrase. The passphrase--which is the key to unlock all the application secrets--is stored in an encrypted Ansible Vault file that resides within the **Ansible Deployment Project** directory. Access to this vault is controlled by a separate Vault password known only to the administrator.
 
 #### Linux Permissions
 
-This component enforces access control. A dedicated group (`appsecretaccess`) is used to govern who can executethe scripts in your **Application Projects** that require credentials. The permissions on the**Runtime Secrets Directory** are set so that only members of this group can read the encrypted passwords and theGPG passphrase file.
+This component enforces access control. A dedicated group (`appsecretaccess`) is used to govern who can executethe scripts in your **Application Projects** that require credentials. The permissions on the **Runtime Secrets Directory** are set so that only members of this group can read the encrypted passwords and the GPG passphrase file.
 
 ## Deployment and Runtime
 
@@ -79,9 +79,9 @@ This is what happens whenever an authorized user runs one of your scripts from a
 
 - The script starts. It does not interact with the **Ansible Deployment Project** directory.
 - The script reads the GPG passphrase from the protected file (`.gpg_passphrase`) inside the **Runtime Secrets Directory** into a variable in memory.
-- The script uses this passphrase to decrypt the specific application password it needs from the corresponding file in the **Runtime Secrets Directory** (e.g., `oracle_db_password.txt.gpg`) into a second memory variable.
+- The script uses this passphrase to decrypt the specific application secret it needs from the corresponding file in the **Runtime Secrets Directory** (e.g., `oracle_db_password.txt.gpg`) into a second memory variable.
 - It uses the decrypted application password to perform its task (e.g., connect to the Oracle database).
-- Once the task is complete, the script immediately clears the variables that held the GPG passphrase and the decrypted application password, minimizing their lifetime in memory. The plaintext application password is never written to disk.
+- Once the task is complete, the script immediately clears the variables that held the GPG passphrase and the decrypted application secret, minimizing their lifetime in memory. The plaintext application password is never written to disk.
 
 ### Note on ownership and permissions
 
