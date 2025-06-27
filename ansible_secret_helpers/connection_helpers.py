@@ -86,7 +86,8 @@ def create_ntlm_connection(server_address, user_secret, pswd_secret):
     """
     Retrieves credentials and establishes an NTLM-authenticated LDAP connection.
     This is typically used for connecting to Microsoft Active Directory.
-    It assumes the user_secret contains the full NTLM-formatted username (e.g., 'DOMAIN\user').
+    
+    It assumes the user_secret contains the full NTLM-formatted username (e.g., 'DOMAIN\\user').
 
     Args:
         server_address (str): The address of the domain controller (e.g., '100.74.1.219:389').
@@ -125,4 +126,3 @@ def create_ntlm_connection(server_address, user_secret, pswd_secret):
         if conn and conn.bound:
             conn.unbind()
         sys.exit(1)
-
