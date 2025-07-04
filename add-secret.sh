@@ -22,6 +22,10 @@ FILES_DIR="${ANSIBLE_PROJECT_DIR}/files"
 VAULT_FILE="${ANSIBLE_PROJECT_DIR}/group_vars/all/vault.yml"
 VENV_PATH="${ANSIBLE_PROJECT_DIR}/venv/bin/activate"
 
+# --- NEW: Define a temporary file and ensure it's cleaned up on exit ---
+TEMP_FILE=$(mktemp /tmp/add-secret.XXXXXX)
+trap 'rm -f "$TEMP_FILE"' EXIT
+
 
 # --- Input Validation ---
 
@@ -87,18 +91,21 @@ fi
 echo "--> Encrypting new secret for '${SECRET_NAME}'..."
 # We pipe the secret password directly into GPG's standard input.
 # This avoids creating a temporary plaintext file on disk.
-# The '--passphrase' argument uses the variable we securely retrieved.
+# --- MODIFIED: The --output now points to the temporary file. ---
 printf '%s' "$SECRET" | gpg --batch --yes --symmetric --cipher-algo AES256 \
     --passphrase "$GPG_PASSPHRASE" \
-    --output "$OUTPUT_FILE"
+    --output "$TEMP_FILE"
 
 # Check if GPG command succeeded.
 if [[ $? -eq 0 ]]; then
-    echo "✅ Success! Encrypted secret saved to:"
-    echo "   ${OUTPUT_FILE}"
-    # Set correct ownership for the new file
+    echo "✅ Success! Encrypted secret created in temporary file."
+    # --- MODIFIED: Now we use sudo to move the file and set ownership. ---
+    echo "--> Moving secret to final destination and setting permissions..."
+    sudo mv "$TEMP_FILE" "$OUTPUT_FILE"
     sudo chown service_account:appsecretaccess "$OUTPUT_FILE"
-    echo "--> Ownership set to service_account:appsecretaccess"
+    sudo chmod 640 "$OUTPUT_FILE"  # <-- ADD THIS LINE
+    echo "--> Permissions set to 640 (-rw-r-----)"
+    echo "--> Final file at: ${OUTPUT_FILE}"
 else
     echo "❌ Error: GPG encryption failed." >&2
     exit 1
@@ -107,5 +114,6 @@ fi
 # Deactivate the virtual environment
 deactivate
 
+# The 'trap' command will automatically remove the temp file now
 echo "--> Done."
 
