@@ -3,6 +3,7 @@ import sys
 import ssl
 import sqlalchemy
 import cx_Oracle as cx
+import ldap3
 from ldap3 import Server, Connection, ALL, Tls # Requires ldap3 library
 import secret_retriever # Imports the local module
 
@@ -28,7 +29,7 @@ def create_ldap_connection(ldap_server, user_secret, pswd_secret):
         if not oud.bound:
             # Use the correct server variable in the error message
             raise ConnectionError(f'Error: cannot bind to {ldap_server}')
-
+        
         # Return the connection object only on success
         return oud
 
@@ -86,7 +87,7 @@ def create_ntlm_connection(server_address, user_secret, pswd_secret):
     """
     Retrieves credentials and establishes an NTLM-authenticated LDAP connection.
     This is typically used for connecting to Microsoft Active Directory.
-    
+
     It assumes the user_secret contains the full NTLM-formatted username (e.g., 'DOMAIN\\user').
 
     Args:
@@ -126,3 +127,5 @@ def create_ntlm_connection(server_address, user_secret, pswd_secret):
         if conn and conn.bound:
             conn.unbind()
         sys.exit(1)
+
+

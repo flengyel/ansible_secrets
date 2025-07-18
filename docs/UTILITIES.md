@@ -311,6 +311,7 @@ import sys
 import ssl
 import sqlalchemy
 import cx_Oracle as cx
+import ldap3
 from ldap3 import Server, Connection, ALL, Tls # Requires ldap3 library
 import secret_retriever # Imports the local module
 
@@ -388,6 +389,51 @@ def create_db_connection(dbhost, dbport, dbsid, user_secret, pswd_secret, engine
             conn.close()
         if engine:
             engine.dispose()
+        sys.exit(1)
+
+def create_ntlm_connection(server_address, user_secret, pswd_secret):
+    """
+    Retrieves credentials and establishes an NTLM-authenticated LDAP connection.
+    This is typically used for connecting to Microsoft Active Directory.
+
+    It assumes the user_secret contains the full NTLM-formatted username (e.g., 'DOMAIN\\user').
+
+    Args:
+        server_address (str): The address of the domain controller (e.g., '100.74.1.219:389').
+        user_secret (str): The name of the secret storing the full username.
+        pswd_secret (str): The name of the secret storing the password.
+
+    Returns:
+        A bound ldap3 Connection object.
+    """
+    ntlm_user = None
+    ntlm_pswd = None
+    conn = None
+    try:
+        # Retrieve the full username (DOMAIN\user) and password from secrets
+        ntlm_user = secret_retriever.get_secret(user_secret)
+        ntlm_pswd = secret_retriever.get_secret(pswd_secret)
+
+        # Define the server and create the connection object
+        server = ldap3.Server(server_address, get_info=ldap3.ALL)
+        conn = ldap3.Connection(server,
+                                user=ntlm_user,
+                                password=ntlm_pswd,
+                                authentication=ldap3.NTLM,
+                                auto_bind=True)
+
+        if not conn.bound:
+            raise ldap3.core.exceptions.LDAPBindError(f"NTLM bind failed for user {ntlm_user}")
+
+        # Clear credentials from memory and return the connection
+        ntlm_user = None
+        ntlm_pswd = None
+        return conn
+
+    except Exception as e:
+        print(f"Error creating NTLM connection: {e}", file=sys.stderr)
+        if conn and conn.bound:
+            conn.unbind()
         sys.exit(1)
 ```
 
