@@ -306,8 +306,7 @@ echo "Creating Database Gamma secret..."
 deactivate
 ```
 
-After running these commands, verify that your encrypted files (e.g., `ldap_dm_secret.txt.gpg`)  
-have been created in the `/opt/ansible_secrets/files/` directory.
+"After running these commands, verify that your encrypted files (e.g., `svc_alpha_secret.txt.gpg`) have been created in the `/opt/ansible_secrets/files/` directory."
 
 ## Section 3: Ansible Configuration and Playbook
 
@@ -455,9 +454,9 @@ For Bash scripts, the get_secret.sh utility is the standard method for retrievin
   set -euo pipefail
 
   if [[ $# -ne 1 ]]; then
-      echo "Usage: $0 <secret_name>" >&2
-      echo "Example: $0 oracle_db" >&2
-      exit 1
+    echo "Usage: $0 <secret_name>" >&2
+    echo "Example: $0 db_gamma" >&2
+    exit 1
   fi
 
   SECRET_NAME="$1"
