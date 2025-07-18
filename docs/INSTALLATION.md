@@ -290,17 +290,17 @@ mkdir -p files
 # The script will prompt you for the secret value securely.
 # NOTE: the values below are examples only.
 
-echo "Creating LDAP DM secret..."
-./add-secret.sh ldap_dm
-# --> Enter 'Ldap&DmP@sswOrd!2025' when prompted
+echo "Creating Service Alpha secret..."
+./add-secret.sh svc_alpha
+# --> Enter 'P1aceh0lderAplhaP@ss!' when prompted
 
-echo "Creating LDAP RO secret..."
-./add-secret.sh ldap_ro
-# --> Enter 'LdapR0nlyP@sswOrd' when prompted
+echo "Creating Service Beta secret..."
+./add-secret.sh svc_beta
+# --> Enter 'P1aceh0lderBetaP@ss!' when prompted
 
-echo "Creating Oracle DB secret..."
-./add-secret.sh oracle_db
-# --> Enter 'S3cureOracle!P@ss' when prompted
+echo "Creating Database Gamma secret..."
+./add-secret.sh db_gamma
+# --> Enter 'P1aceh0lderGammaP@ss!' when prompted
 
 # Deactivate the environment when finished creating secrets
 deactivate
@@ -347,10 +347,9 @@ Create `/opt/ansible_secrets/deploy_secrets.yml`:
     service_user: "service_account"
     secret_access_group: "appsecretaccess"
     encrypted_secret_files:
-      - green_dm_secret.txt.gpg
-      - yellow_dm_secret.txt.gpg
-      - ldap_ro_secret.txt.gpg
-      - oracle_db_secret.txt.gpg
+      - svc_alpha_secret.txt.gpg
+      - svc_beta_secret.txt.gpg
+      - db_gamma_secret.txt.gpg
   vars_files:
     - group_vars/all/vault.yml
 
@@ -432,10 +431,10 @@ The output should look like this (owner, group, permissions, and files must matc
 
 ```bash
 total 12
--r--r----- 1 service_account appsecretaccess  111 Jun 07 08:44 .gpg_passphrase
--r--r----- 1 service_account appsecretaccess 1408 Jun 07 08:44 ldap_dm_secret.txt.gpg
--r--r----- 1 service_account appsecretaccess 1408 Jun 07 08:44 ldap_ro_secret.txt.gpg
--r--r----- 1 service_account appsecretaccess 1408 Jun 07 08:44 oracle_db_secret.txt.gpg
+-r--r----- 1 service_account appsecretaccess  111 Jul 18 19:30 .gpg_passphrase
+-r--r----- 1 service_account appsecretaccess 1408 Jul 18 19:30 db_gamma_secret.txt.gpg
+-r--r----- 1 service_account appsecretaccess 1408 Jul 18 19:30 svc_alpha_secret.txt.gpg
+-r--r----- 1 service_account appsecretaccess 1408 Jul 18 19:30 svc_beta_secret.txt.gpg
 ```
 
 ## Section 5: Script Integration and Runtime Operation
