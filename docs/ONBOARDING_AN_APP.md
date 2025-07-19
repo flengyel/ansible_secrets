@@ -133,7 +133,7 @@ After setting the final permissions, perform a final test by running the applica
 
 To run the script interactively for testing, your user account must be a member of the `appsecretaccess` group.
 
-If the script runs successfully, the onboarding process is complete. The script is now ready for its production use (e.g., being called by a `cronjob` running as the `service_account` user).  
+If the script runs successfully, the onboarding process is complete. The script is now ready for its production use (e.g., being called by a cron job).
 
 ## Step 4: Configuring for Automated Execution (Cron)
 
@@ -185,13 +185,13 @@ cleanup() {
 trap cleanup EXIT HUP INT QUIT TERM
 
 # --- Retrieve Secrets ---
-ADMIN=$(/usr/local/bin/get_secret.sh ldap_mgr)
+ADMIN=$(/usr/local/bin/get_secret.sh svc_alpha)
 if [[ -z "$ADMIN" ]]; then
     echo "Error: Failed to retrieve LDAP manager username." >&2
     exit 1
 fi
 
-PSWD=$(/usr/local/bin/get_secret.sh green_dm)
+PSWD=$(/usr/local/bin/get_secret.sh svc_beta)
 if [[ -z "$PSWD" ]]; then
     echo "Error: Failed to retrieve LDAP manager password." >&2
     exit 1
@@ -199,9 +199,9 @@ fi
 
 
 # --- Main Logic ---
-OUD="ldaps://dsprod-dc1.cuny.edu:636"
-BASEDN="CN=users,dc=cuny,dc=edu"
-CACERT="/etc/pki/tls/cuny.edu.pem"
+OUD="ldaps://oud.example.com:636"
+BASEDN="CN=users,dc=example,dc=com"
+CACERT="/etc/pki/tls/example.com.pem"
 
 # Check if the first argument looks like an 8-digit EMPLID.
 # If it does, just print it back out.
@@ -216,8 +216,8 @@ LOGIN_ID="$1"
 # The ldapsearch command now uses safely quoted variables.
 EMPLID_RESULT=$(LDAPTLS_CACERT=$CACERT \
     ldapsearch -LLL -x -H "$OUD" -D "$ADMIN" -w "$PSWD" -b "$BASEDN" -s sub "(uid=$LOGIN_ID)" cunyEduEmplID | \
-    grep 'cunyEduEmplID:' | \
-    sed 's/cunyEduEmplID: //')
+    grep 'exampleComEmplID:' | \
+    sed 's/exampleComEmplID: //')
 
 # The 'unset' commands are now handled by the 'trap' and are not needed here.
 
@@ -266,19 +266,19 @@ def main():
     try:
         # Use the helper to establish a secure, authenticated LDAP connection.
         ldap_conn = create_ldap_connection(
-            "dsprod-dc1.cuny.edu", "ldap_mgr", "green_dm"
+            "oud.example.com", "svc_alpha", "svc_beta"
         )
         
         # Perform the LDAP search
         ldap_conn.search(
-            search_base='CN=users,dc=cuny,dc=edu',
+            search_base='CN=users,dc=example,dc=com',
             search_filter=f'(uid={login_id})',
-            attributes=['cunyEduEmplID']
+            attributes=['exampleComEmplID']
         )
 
         # Process the response
         if ldap_conn.response:
-            emplid = ldap_conn.response[0]['attributes'].get('cunyEduEmplID', [None])[0]
+            emplid = ldap_conn.response[0]['attributes'].get('exampleComEmplID', [None])[0]
             if emplid:
                 print(emplid)
 
