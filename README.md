@@ -49,7 +49,7 @@ Ansible Secrets consists of three security components and relies on a specific d
 
 #### GPG Encryption
 
-This component provides confidentiality for your application secrets. Each secret is encrypted with GPG(AES-256 cipher) and the resulting file (e.g., `oracle_db_password.txt.gpg`) is stored in the**Runtime Secrets Directory**. A single, strong GPG passphrase is used to encrypt the secrets files.
+This component provides confidentiality for your application secrets. Each secret is encrypted with GPG(AES-256 cipher) and the resulting file (e.g., `svc_alpha_secret.txt.gpg`) is stored in the**Runtime Secrets Directory**. A single, strong GPG passphrase is used to encrypt the secrets files.
 
 #### Ansible Vault
 
@@ -79,7 +79,7 @@ This is what happens whenever an authorized user runs one of your scripts from a
 
 - The script starts. It does not interact with the **Ansible Deployment Project** directory.
 - The script reads the GPG passphrase from the protected file (`.gpg_passphrase`) inside the **Runtime Secrets Directory** into a variable in memory.
-- The script uses this passphrase to decrypt the specific application secret it needs from the corresponding file in the **Runtime Secrets Directory** (e.g., `oracle_db_password.txt.gpg`) into a second memory variable.
+- The script uses this passphrase to decrypt the specific application secret it needs from the corresponding file in the **Runtime Secrets Directory** (e.g., `svc_alpha_secret.txt.gpg`) into a second memory variable.
 - It uses the decrypted application password to perform its task (e.g., connect to the Oracle database).
 - Once the task is complete, the script immediately clears the variables that held the GPG passphrase and the decrypted application secret, minimizing their lifetime in memory. The plaintext application password is never written to disk.
 
