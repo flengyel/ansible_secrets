@@ -7,10 +7,11 @@ DOC_DIR := docs
 # Pandoc command with flags.
 # --pdf-engine=xelatex: A modern engine that handles Unicode well.
 # --highlight-style=tango: A popular and readable style for syntax highlighting.
-# -V monofont="DejaVu Sans Mono": Specifies a monospaced font with excellent Unicode support
-#   to correctly render box-drawing characters in code blocks.
+# -V monofont="DejaVu Sans Mono": Specifies a monospaced font for code blocks.
 # -V mainfont="DejaVu Sans": Specifies the main font for the document body.
-PANDOC := pandoc --pdf-engine=xelatex --highlight-style=tango -V mainfont="DejaVu Sans" -V monofont="DejaVu Sans Mono"
+# -V geometry:margin=0.75in: Sets the page margins to 0.75 inches, giving more
+#   horizontal space to prevent ugly wrapping in code blocks.
+PANDOC := pandoc --pdf-engine=xelatex --highlight-style=tango -V mainfont="DejaVu Sans" -V monofont="DejaVu Sans Mono" -V geometry:margin=0.75in
 
 # --- File Definitions ---
 # Find all .md files in the docs directory.
@@ -60,4 +61,5 @@ $(DOC_DIR)/%.pdf: $(DOC_DIR)/%.md
 clean:
 	@echo "Cleaning up generated PDF files..."
 	@$(CLEAN)
+
 
