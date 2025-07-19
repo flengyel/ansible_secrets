@@ -7,10 +7,10 @@ DOC_DIR := docs
 # Pandoc command with flags.
 # --pdf-engine=xelatex: A modern engine that handles Unicode well.
 # --highlight-style=tango: A popular and readable style for syntax highlighting.
-# -V monofont="Consolas": Specifies a standard Windows monospaced font to correctly
-#   render box-drawing characters and emojis in code blocks.
-# -V mainfont="Calibri": Specifies a standard Windows font for the document body.
-PANDOC := pandoc --pdf-engine=xelatex --highlight-style=tango -V mainfont="Calibri" -V monofont="Consolas"
+# -V monofont="DejaVu Sans Mono, Segoe UI Emoji": Specifies DejaVu Sans Mono for code,
+#   and falls back to the standard Windows emoji font for characters like ✅ and ❌.
+# -V mainfont="DejaVu Sans": Specifies the main font for the document body.
+PANDOC := pandoc --pdf-engine=xelatex --highlight-style=tango -V mainfont="DejaVu Sans" -V monofont="DejaVu Sans Mono, Segoe UI Emoji"
 
 # --- File Definitions ---
 # Find all .md files in the docs directory.
