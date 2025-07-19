@@ -23,6 +23,18 @@ DOC_PDFS := $(patsubst %.md,%.pdf,$(DOC_SOURCES))
 ROOT_README_SRC := README.md
 ROOT_README_PDF := $(DOC_DIR)/README.pdf
 
+# --- OS-specific commands for 'clean' target ---
+# Use 'del' on Windows and 'rm' on other systems for cleaning up files.
+# This makes the Makefile cross-platform.
+ifeq ($(OS),Windows_NT)
+    # The 'subst' function replaces forward slashes with backslashes for Windows compatibility.
+    # The '2>nul' part suppresses "file not found" errors if files don't already exist.
+    CLEAN = del /F /Q $(subst /,\,$(DOC_PDFS) $(ROOT_README_PDF)) 2>nul
+else
+    CLEAN = rm -f $(DOC_PDFS) $(ROOT_README_PDF)
+endif
+
+
 # --- Targets ---
 
 # The 'all' target is the default. It depends on all the PDF files that need to be created.
@@ -47,5 +59,5 @@ $(DOC_DIR)/%.pdf: $(DOC_DIR)/%.md
 .PHONY: clean
 clean:
 	@echo "Cleaning up generated PDF files..."
-	@rm -f $(DOC_PDFS) $(ROOT_README_PDF)
+	@$(CLEAN)
 
