@@ -137,27 +137,26 @@ If the script runs successfully, the onboarding process is complete. The script 
 
 ## Step 4: Configuring for Automated Execution (Cron)
 
-For scheduled tasks, the script must be run by the `service_account` user to ensure it has the correct permissions.
+For scheduled tasks, the script must be run by a user with the correct permissions.
 
 ### Requirements for Cronjobs
 
-- **User:** The cronjob must be configured to run as the `service_account` user.
+- **User:** The user running the cron job must be a member of the `appsecretaccess` group. This can be a designated administrator account or the `service_account` user.
 - **Absolute Paths:** The cron environment is minimal. Always use absolute paths for all scripts and executables in your command (e.g., `/usr/local/bin/get_secret.sh`, `/usr/bin/python3`).
 - **Logging:** Always redirect standard output (`>`) and standard error (`2>&1`) to a log file for debugging.
 
 #### Example Cronjob Entry
 
-For system services, it is best practice to add a configuration file in the `/etc/cron.d/` directory.
+The recommended practice is to have the cron job execute a single wrapper script. The wrapper script is responsible for setting up the environment and handling all logging.
 
-Example for a file named /`etc/cron.d/my-oracle-report`:
+The following example would be placed in the crontab of the user running the job (e.g., an administrator).
 
 ```bash
-# Run the Oracle report script daily at 2:00 AM as service_account
-0 2 * * * service_account   /path/to/your/oracle_report_wrapper.sh >> /var/log/oracle_report.log 2>&1
+# Run the daily report job at 1:00 AM
+0 1 * * * /path/to/your/wrapper_script.sh
 ```
 
-This entry specifies the schedule, the user (`service_account`), the full command to run, and logging redirection.  
-
+This entry only specifies the schedule and the single command to run. All environment setup, logging, and error handling are contained within wrapper_script.sh, as demonstrated in `EXAMPLE_CRON_JOB.md`.
 
 ### Example: Converting a Bash LDAP Script to Python
 
