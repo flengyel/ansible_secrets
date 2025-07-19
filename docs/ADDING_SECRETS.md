@@ -32,17 +32,17 @@ vars:
   service_user: "service_account"
   secret_access_group: "appsecretaccess"
   encrypted_secret_files:
-    - green_dm_secret.txt.gpg
-    - ldap_ro_secret.txt.gpg
-    - yellow_dm_secret.txt.gpg
+    - svc_alpha_secret.txt.gpg
+    - svc_beta_secret.txt.gpg
+    - db_gamma_secret.txt.gpg
 ```
 
 * Add the new filename to the list**
 ```yaml
   encrypted_secret_files:
-    - green_dm_secret.txt.gpg
-    - ldap_ro_secret.txt.gpg
-    - yellow_dm_secret.txt.gpg
+    - svc_alpha_secret.txt.gpg
+    - svc_beta_secret.txt.gpg
+    - db_gamma_secret.txt.gpg
     - mssql_db_secret.txt.gpg  # <-- Add the new file here
 ```
 
