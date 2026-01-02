@@ -345,7 +345,7 @@ printf '%s' "$SECRET" | gpg --batch --yes --symmetric --cipher-algo AES256 \
 
 # Check if GPG command succeeded.
 if [[ $? -eq 0 ]]; then
-    echo "✅ Success! Encrypted secret created in temporary file."
+    echo "Success! Encrypted secret created in temporary file."
     # --- MODIFIED: Now we use sudo to move the file and set ownership. ---
     echo "--> Moving secret to final destination and setting permissions..."
     sudo mv "$TEMP_FILE" "$OUTPUT_FILE"
@@ -354,7 +354,7 @@ if [[ $? -eq 0 ]]; then
     echo "--> Permissions set to 640 (-rw-r-----)"
     echo "--> Final file at: ${OUTPUT_FILE}"
 else
-    echo "❌ Error: GPG encryption failed." >&2
+    echo "Error: GPG encryption failed." >&2
     exit 1
 fi
 
