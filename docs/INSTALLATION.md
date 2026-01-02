@@ -106,13 +106,111 @@ source venv/bin/activate
 pip install ansible-core gnupg
 ```
 
-## Section 2: Credential and Ansible Vault Preparation
+## Section 2: Ansible Configuration and Playbook
 
-This section covers the creation of the Ansible Vault to protect the master GPG passphrase,  
-the installation of the `add-secret.sh` helper script, and finally, the secure creation of  
-your encrypted application secrets.
+### 2.1. Configure Ansible (`ansible.cfg` and `inventory`)
 
-### 2.1. Prepare the Ansible Vault
+- Create `/opt/ansible_secrets/ansible.cfg`:
+
+```ini
+[defaults]
+inventory = ./inventory
+vault_password_file = ./.ansible_vault_password
+host_key_checking = False
+
+[privilege_escalation]
+become = true
+become_method = sudo
+become_user = root
+become_ask_pass = true
+```
+
+- Create `/opt/ansible_secrets/inventory`:
+
+```ini
+[local_server]
+localhost ansible_connection=local ansible_python_interpreter={{ ansible_playbook_python }}
+```
+
+### 2.2. Create the Ansible Playbook (`deploy_secrets.yml`)
+
+Create `/opt/ansible_secrets/deploy_secrets.yml`:
+
+``` yaml
+- name: Deploy Application Secrets Locally
+  hosts: local_server
+  vars:
+    secrets_target_dir: "/opt/credential_store"
+    service_user: "service_account"
+    secret_access_group: "appsecretaccess"
+    encrypted_secret_files:
+      - svc_alpha_secret.txt.gpg
+      - svc_beta_secret.txt.gpg
+      - db_gamma_secret.txt.gpg
+  vars_files:
+    - group_vars/all/vault.yml
+
+  tasks:
+    - name: Ensure base directories and groups are set up
+      ansible.builtin.include_tasks: tasks/setup.yml
+
+    - name: Deploy the single GPG passphrase file from vaulted variable
+      ansible.builtin.copy:
+        content: "{{ app_gpg_passphrase }}"
+        dest: "{{ secrets_target_dir }}/.gpg_passphrase"
+        owner: "{{ service_user }}"
+        group: "{{ secret_access_group }}"
+        mode: '0440'
+      no_log: true
+
+    - name: Deploy all encrypted application password files
+      ansible.builtin.copy:
+        src: "./files/{{ item }}" # From the project's files/ dir
+        dest: "{{ secrets_target_dir }}/{{ item }}"
+        owner: "{{ service_user }}"
+        group: "{{ secret_access_group }}"
+        mode: '0440'
+      with_items: "{{ encrypted_secret_files }}"
+```
+
+*Create a supporting task file: `tasks/setup.yml`*:
+
+```bash
+mkdir -p /opt/ansible_secrets/tasks
+```
+
+Create `/opt/ansible_secrets/tasks/setup.yml`:
+
+```yaml
+- name: Ensure the secret access group exists
+  ansible.builtin.group:
+    name: "{{ secret_access_group }}"
+    state: present
+    system: true
+
+- name: Ensure service user is part of the secret access group
+  ansible.builtin.user:
+    name: "{{ service_user }}"
+    groups: "{{ secret_access_group }}"
+    append: true
+
+- name: Ensure secrets target directory exists with correct permissions
+  ansible.builtin.file:
+    path: "{{ secrets_target_dir }}"
+    state: directory
+    owner: "{{ service_user }}"
+    group: "{{ secret_access_group }}"
+    mode: '0750'
+```
+
+## Section 3: Credential and Ansible Vault Preparation
+
+This section covers the creation of the Ansible Vault to protect 
+the master GPG passphrase,  the installation of the `add-secret.sh` 
+helper script, and finally, the secure creation of  your encrypted 
+application secrets.
+
+### 3.1. Prepare the Ansible Vault
 
 First, we create the Ansible Vault. This encrypted file will hold the single GPG passphrase  
 that is used to encrypt all of your individual application secrets.
@@ -139,7 +237,7 @@ app_gpg_passphrase: "MyV3ryStr0ngGPGPassphr@s3"
 
 Save and close the file.  The GPG passphrase is now securely stored inside the vault.
 
-### 2.2. Install the add-secret.sh Administrative Script
+### 3.2. Install the add-secret.sh Administrative Script
 
 This helper script automates the creation of new encrypted secrets by securely  
 retrieving the GPG passphrase from the Ansible Vault you just created.  
@@ -274,7 +372,7 @@ sudo chown 'flengyel:domain users' /opt/ansible_secrets/add-secret.sh
 sudo chmod 750 /opt/ansible_secrets/add-secret.sh
 ```
 
-### 2.3. Create Encrypted Secrets Using the Helper Script
+### 3.3. Create Encrypted Secrets Using the Helper Script
 
 Now, with the vault and helper script in place, you can securely create an encrypted file for each of your application secrets.
 
@@ -307,103 +405,6 @@ deactivate
 ```
 
 "After running these commands, verify that your encrypted files (e.g., `svc_alpha_secret.txt.gpg`) have been created in the `/opt/ansible_secrets/files/` directory."
-
-## Section 3: Ansible Configuration and Playbook
-
-### 3.1. Configure Ansible (`ansible.cfg` and `inventory`)
-
-- Create `/opt/ansible_secrets/ansible.cfg`:
-
-```ini
-[defaults]
-inventory = ./inventory
-vault_password_file = ./.ansible_vault_password
-host_key_checking = False
-
-[privilege_escalation]
-become = true
-become_method = sudo
-become_user = root
-become_ask_pass = true
-```
-
-- Create `/opt/ansible_secrets/inventory`:
-
-```ini
-[local_server]
-localhost ansible_connection=local ansible_python_interpreter={{ ansible_playbook_python }}
-```
-
-### 3.2. Create the Ansible Playbook (`deploy_secrets.yml`)
-
-Create `/opt/ansible_secrets/deploy_secrets.yml`:
-
-``` yaml
-- name: Deploy Application Secrets Locally
-  hosts: local_server
-  vars:
-    secrets_target_dir: "/opt/credential_store"
-    service_user: "service_account"
-    secret_access_group: "appsecretaccess"
-    encrypted_secret_files:
-      - svc_alpha_secret.txt.gpg
-      - svc_beta_secret.txt.gpg
-      - db_gamma_secret.txt.gpg
-  vars_files:
-    - group_vars/all/vault.yml
-
-  tasks:
-    - name: Ensure base directories and groups are set up
-      ansible.builtin.include_tasks: tasks/setup.yml
-
-    - name: Deploy the single GPG passphrase file from vaulted variable
-      ansible.builtin.copy:
-        content: "{{ app_gpg_passphrase }}"
-        dest: "{{ secrets_target_dir }}/.gpg_passphrase"
-        owner: "{{ service_user }}"
-        group: "{{ secret_access_group }}"
-        mode: '0440'
-      no_log: true
-
-    - name: Deploy all encrypted application password files
-      ansible.builtin.copy:
-        src: "./files/{{ item }}" # From the project's files/ dir
-        dest: "{{ secrets_target_dir }}/{{ item }}"
-        owner: "{{ service_user }}"
-        group: "{{ secret_access_group }}"
-        mode: '0440'
-      with_items: "{{ encrypted_secret_files }}"
-```
-
-*Create a supporting task file for clarity, `tasks/setup.yml`*:
-
-```bash
-mkdir -p /opt/ansible_secrets/tasks
-```
-
-Create `/opt/ansible_secrets/tasks/setup.yml`:
-
-```yaml
-- name: Ensure the secret access group exists
-  ansible.builtin.group:
-    name: "{{ secret_access_group }}"
-    state: present
-    system: true
-
-- name: Ensure service user is part of the secret access group
-  ansible.builtin.user:
-    name: "{{ service_user }}"
-    groups: "{{ secret_access_group }}"
-    append: true
-
-- name: Ensure secrets target directory exists with correct permissions
-  ansible.builtin.file:
-    path: "{{ secrets_target_dir }}"
-    state: directory
-    owner: "{{ service_user }}"
-    group: "{{ secret_access_group }}"
-    mode: '0750'
-```
 
 ## Section 4: Deployment
 
