@@ -3,6 +3,7 @@
 # --- Configuration ---
 # Directory where the documentation source files and PDFs are located.
 DOC_DIR := docs
+EXAMPLES_DIR := examples
 
 # Pandoc command with flags.
 # --pdf-engine=xelatex: A modern engine that handles Unicode well.
@@ -20,6 +21,10 @@ DOC_SOURCES := $(wildcard $(DOC_DIR)/*.md)
 # Create a list of target PDF files by replacing the .md extension with .pdf.
 DOC_PDFS := $(patsubst %.md,%.pdf,$(DOC_SOURCES))
 
+# Likewise for examples
+EXAMPLES_SOURCES := $(wildcard $(EXAMPLES_DIR)/*.md)
+EXAMPLES_PDFS    := $(patsubst %.md,%.pdf,$(EXAMPLES_SOURCES))
+
 # Define the root README source and its target PDF location.
 ROOT_README_SRC := README.md
 ROOT_README_PDF := $(DOC_DIR)/README.pdf
@@ -30,9 +35,9 @@ ROOT_README_PDF := $(DOC_DIR)/README.pdf
 ifeq ($(OS),Windows_NT)
     # The 'subst' function replaces forward slashes with backslashes for Windows compatibility.
     # The '2>nul' part suppresses "file not found" errors if files don't already exist.
-    CLEAN = del /F /Q $(subst /,\,$(DOC_PDFS) $(ROOT_README_PDF)) 2>nul
+    CLEAN = del /F /Q $(subst /,\,$(DOC_PDFS) $(EXAMPLES_PDFS) $(ROOT_README_PDF)) 2>nul
 else
-    CLEAN = rm -f $(DOC_PDFS) $(ROOT_README_PDF)
+    CLEAN = rm -f $(DOC_PDFS) $(ROOT_README_PDF) $(EXAMPLES_PDFS)
 endif
 
 
@@ -41,7 +46,7 @@ endif
 # The 'all' target is the default. It depends on all the PDF files that need to be created.
 # Typing 'make' or 'make all' will build everything.
 .PHONY: all
-all: $(DOC_PDFS) $(ROOT_README_PDF)
+all: $(DOC_PDFS) $(ROOT_README_PDF) $(EXAMPLES_PDFS)
 
 # Rule for converting the root README.md to docs/README.pdf.
 $(ROOT_README_PDF): $(ROOT_README_SRC)
@@ -54,6 +59,12 @@ $(ROOT_README_PDF): $(ROOT_README_SRC)
 $(DOC_DIR)/%.pdf: $(DOC_DIR)/%.md
 	@echo "Building $@ from $<..."
 	@$(PANDOC) $< -o $@
+
+# Likewise for the examples/ directory
+$(EXAMPLES_DIR)/%.pdf: $(EXAMPLES_DIR)/%.md
+	@echo "Building $@ from $<..."
+	@$(PANDOC) $< -o $@
+
 
 # The 'clean' target removes all generated PDF files.
 # This is useful for starting a fresh build.
