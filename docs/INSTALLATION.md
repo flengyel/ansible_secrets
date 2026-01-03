@@ -8,15 +8,52 @@ This guide will walk through the setup of the Ansible Secrets project, secret en
   1. LDAP DM Password: `Ldap&DmP@sswOrd!2025`
   2. LDAP RO Password: `LdapR0nlyP@sswOrd`
   3. Oracle DB Password: `S3cureOracle!P@ss`
-- **Single GPG Passphrase (to encrypt above passwords):** `MyV3ryStr0ngGPGPassphr@s3`
-- **Ansible Vault Password (to protect the GPG passphrase):** `MyUltraS3cureAnsibl3VaultP@ss`
+- **Single GPG Passphrase (to encrypt above passwords):** Generated automatically by `setup.sh` (48 characters) and stored encrypted in `/opt/ansible_secrets/group_vars/all/vault.yml`.
+- **Ansible Vault Password (to protect the GPG passphrase):** Generated automatically by `setup.sh` (48 characters) and stored in `/opt/ansible_secrets/.ansible_vault_password` (mode `0600`).
 - **Project & Secret Directories:**
   1. Ansible Project: `/opt/ansible_secrets`
   2. Deployed Secrets: `/opt/credential_store`
 - **Users & Groups:**
   1. Service User: `service_account`
   2. Access Group: `appsecretaccess`
-  3. Admin User (you): `flengyel`
+  3. Admin User (you): your current login user (the user who runs `./setup.sh`), e.g., `flengyel`
+
+## Recommended: Automated Setup (setup.sh)
+
+`setup.sh` is the preferred installation method. It automates Sections 1–3.2 below and installs the runtime helpers system-wide.
+
+### Prerequisites (RHEL)
+
+Install the small set of system prerequisites (if they are not already present):
+
+```bash
+sudo dnf install python3 gnupg2 openssl rsync -y
+```
+
+### Run the installer
+
+From the **repository root** on the target host:
+
+```bash
+./setup.sh
+```
+
+The script will prompt only for your **sudo** password (when required). It will **not** prompt you for an Ansible Vault password or a GPG passphrase; both are generated automatically (**48 characters** each).
+
+### What setup.sh creates/installs
+
+- Admin toolkit at `/opt/ansible_secrets` (including `venv/`, `ansible.cfg`, `inventory`, playbook, tasks, and `add-secret.sh`)
+- `/opt/ansible_secrets/.ansible_vault_password` (mode `0600`)
+- `/opt/ansible_secrets/group_vars/all/vault.yml` (encrypted; mode `0640`) containing `app_gpg_passphrase`
+- Runtime helpers:
+  - `/usr/local/bin/get_secret.sh` (mode `0750`, owner `service_account:appsecretaccess`)
+  - `/usr/local/lib/ansible_secret_helpers/` (dir `0750`, files `0640`, owner `service_account:appsecretaccess`)
+
+If `setup.sh` adds you to the `appsecretaccess` group, you must **log out and log back in** before the new permissions apply.
+
+After `setup.sh`, continue at:
+- **Section 3.3** (create encrypted secrets in `/opt/ansible_secrets/files/`)
+- **Section 4** (run the playbook to populate `/opt/credential_store/`)
 
 ## Directory Structure Diagram
 
@@ -27,6 +64,7 @@ This guide will walk through the setup of the Ansible Secrets project, secret en
 │   │   ├── ansible.cfg
 │   │   ├── deploy_secrets.yml
 │   │   ├── inventory
+│   │   ├── venv/               (Python venv for admin tooling)
 │   │   ├── .ansible_vault_password
 │   │   ├── add-secret.sh         (Admin utility script)
 │   │   ├── files/
@@ -55,6 +93,9 @@ This guide will walk through the setup of the Ansible Secrets project, secret en
 
 ## Section 1: Initial Server Setup
 
+> If you ran `./setup.sh`, you can skip Sections 1–3.2 and continue at **Section 3.3** and **Section 4**.
+
+
 These steps prepare the server environment with the necessary users, groups, and software.
 
 ### 1.1. Create Users and Groups
@@ -82,7 +123,8 @@ sudo usermod -aG appsecretaccess flengyel
 ### 1.2. Install Required Software
 
 ```bash
-sudo dnf install ansible-core gnupg2 -y
+sudo dnf install python3 gnupg2 openssl rsync -y
+# (Optional) ansible-core system package is not required when using setup.sh (it installs ansible-core into the venv)
 ```
 
 ### 1.3. Set Up Python Virtual Environment & Project Directory
@@ -92,7 +134,7 @@ This isolates your Ansible installation.
 ```bash
 # Create and take ownership of the Ansible project directory
 sudo mkdir -p /opt/ansible_secrets
-sudo chown 'flengyel:domain users' /opt/ansible_secrets
+sudo chown '<admin_user>:<admin_group>' /opt/ansible_secrets
 cd /opt/ansible_secrets
 
 # Create a Python virtual environment inside the project directory
@@ -212,6 +254,10 @@ application secrets.
 
 ### 3.1. Prepare the Ansible Vault
 
+> If you ran `./setup.sh`, this section is already complete: `.ansible_vault_password` and the encrypted `group_vars/all/vault.yml` are created automatically with randomly generated 48-character values.
+
+
+
 First, we create the Ansible Vault. This encrypted file will hold the single GPG passphrase  
 that is used to encrypt all of your individual application secrets.
 
@@ -238,6 +284,10 @@ app_gpg_passphrase: "MyV3ryStr0ngGPGPassphr@s3"
 Save and close the file.  The GPG passphrase is now securely stored inside the vault.
 
 ### 3.2. Install the add-secret.sh Administrative Script
+
+> If you ran `./setup.sh`, `/opt/ansible_secrets/add-secret.sh` is installed automatically from the repository and you can skip the manual installation below.
+
+
 
 This helper script automates the creation of new encrypted secrets by securely  
 retrieving the GPG passphrase from the Ansible Vault you just created.  
@@ -368,7 +418,7 @@ echo "--> Done."
 - Make the script executable and set the correct ownership for an administrator.
 
 ```bash
-sudo chown 'flengyel:domain users' /opt/ansible_secrets/add-secret.sh
+sudo chown '<admin_user>:<admin_group>' /opt/ansible_secrets/add-secret.sh
 sudo chmod 750 /opt/ansible_secrets/add-secret.sh
 ```
 
@@ -443,6 +493,10 @@ This section details how your application scripts can securely access secrets at
 
 ### 5.1. Reusable Bash Script (get_secret.sh)
 
+> If you ran `./setup.sh`, this script is installed automatically at `/usr/local/bin/get_secret.sh` with owner `service_account:appsecretaccess` and mode `0750`.
+
+
+
 For Bash scripts, the get_secret.sh utility is the standard method for retrieving any secret. It takes a single argument—the name of the secret—and prints its value to standard output.
 
 **Installation:**
@@ -484,6 +538,10 @@ sudo chmod 0750 /usr/local/bin/get_secret.sh
 ```
 
 ## 5.2. Reusable Python Modules
+
+> If you ran `./setup.sh`, the Python helper modules are installed automatically under `/usr/local/lib/ansible_secret_helpers/` with owner `service_account:appsecretaccess`, directory mode `0750`, and file mode `0640`.
+
+
 
 For Python applications, a two-layer helper system is provided. Applications can use the low-level get_secret() function for direct access to any secret, but the high-level connection_helpers module is the recommended approach for database and LDAP connections.
 
@@ -697,4 +755,8 @@ sudo chown service_account:appsecretaccess getemplid.sh
 sudo chmod 0750 getemplid.sh
 ```
 
-See the `UTILITIES.md` guide for the `secure-app.sh` script to automate this task.  
+See the `UTILITIES.md` guide for the `secure-app.sh` script to automate this task.
+
+## Examples
+
+See `examples/EXAMPLES.md` and `examples/load_github_identity.sh` for practical usage patterns (Bash and Python).
