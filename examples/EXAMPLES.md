@@ -4,14 +4,56 @@ This directory contains practical examples for consuming secrets within applicat
 
 ## Architectural Overview
 
-Application scripts operate independently of the Ansible Deployment Project (/opt/ansible_secrets). They interact solely with the Runtime Secrets Directory (/opt/credential_store) via system-wide helper scripts.
+Application scripts operate independently of the Ansible Deployment Project (/opt/ansible_secrets). 
+They interact solely with the Runtime Secrets Directory (/opt/credential_store) via system-wide helper scripts.
 
-| Component | Location | Purpose |
-|---|---|---|
-| Bash Helper | `/usr/local/bin/get_secret.sh` | Decrypts a specific secret to `stdout`. |
-| Python Library | `/usr/local/lib/ansible_secret_helpers` | Provides programmatic secret retrieval. |
-| Credential Store | `/opt/credential_store` | Contains GPG-encrypted secrets and the master passphrase. |
+<div style="overflow: auto;"> <!-- Clearfix container -->
 
+  <!-- Header row -->
+  <div style="width: 25%; float: left; padding: 8px 10px; box-sizing: border-box; font-weight: bold;">
+    Component
+  </div>
+  <div style="width: 35%; float: left; padding: 8px 10px; box-sizing: border-box; font-weight: bold;">
+    Location
+  </div>
+  <div style="width: 40%; float: left; padding: 8px 10px; box-sizing: border-box; font-weight: bold;">
+    Purpose
+  </div>
+
+  <!-- Row 1 -->
+  <div style="width: 25%; float: left; padding: 8px 10px; box-sizing: border-box;">
+    Bash Helper
+  </div>
+  <div style="width: 35%; float: left; padding: 8px 10px; box-sizing: border-box; overflow-wrap: anywhere; word-break: break-word;">
+    <code style="white-space: normal;">/usr/local/bin/<wbr>get_secret.sh</code>
+  </div>
+  <div style="width: 40%; float: left; padding: 8px 10px; box-sizing: border-box;">
+    Decrypts a specific secret to stdout.
+  </div>
+
+  <!-- Row 2 -->
+  <div style="width: 25%; float: left; padding: 8px 10px; box-sizing: border-box;">
+    Python Library
+  </div>
+  <div style="width: 35%; float: left; padding: 8px 10px; box-sizing: border-box; overflow-wrap: anywhere; word-break: break-word;">
+    <code style="white-space: normal;">/usr/local/lib/<wbr>ansible_secret_helpers</code>
+  </div>
+  <div style="width: 40%; float: left; padding: 8px 10px; box-sizing: border-box;">
+    Provides programmatic secret retrieval.
+  </div>
+
+  <!-- Row 3 -->
+  <div style="width: 25%; float: left; padding: 8px 10px; box-sizing: border-box;">
+    Credential Store
+  </div>
+  <div style="width: 35%; float: left; padding: 8px 10px; box-sizing: border-box; overflow-wrap: anywhere; word-break: break-word;">
+    <code style="white-space: normal;">/opt/<wbr>credential_store</code>
+  </div>
+  <div style="width: 40%; float: left; padding: 8px 10px; box-sizing: border-box;">
+    Contains GPG-encrypted secrets and the master passphrase.
+  </div>
+
+</div>
 
 ## 1. Bash Example: GitHub Identity Loader
 
