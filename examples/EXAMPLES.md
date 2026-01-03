@@ -10,7 +10,7 @@ Application scripts operate independently of the Ansible Deployment Project (/op
 |---|---|---|
 |Component|Location|Purpose|
 |Bash Helper|`/usr/local/bin/get_secret.sh`|Decrypts a specific secret to `stdout`.|
-|Python Library|`/usr/local/lib/ansible_secret_helpers`|Provides programmatic secret retrieval.|
+|Python Library|`/usr/local/lib/ansible_secret_helpers`|Secret retrieval.|
 |Credential Store|`/opt/credential_store`|Contains GPG-encrypted secrets and the master passphrase.|
 
 ## 1. Bash Example: GitHub Identity Loader
@@ -19,11 +19,11 @@ The load_github_identity.sh script is a reference implementation for non-interac
 
 This example uses **two secrets**:
 
-- `gitkey`: the **SSH key filename** under `~/.ssh/` (e.g., `id_ed25519_github`). The script derives `SSH_KEY_PATH="$HOME/.ssh/$gitkey"`.
+- `gitkey`: the **SSH key filename** under `~/.ssh/`. The script derives `SSH_KEY_PATH="$HOME/.ssh/$gitkey"`.
 - `gitphrase`: the **SSH key passphrase** used by `ssh-add`.
 
 
-### Key Features
+### Features
 
 - Secret-derived key selection: Retrieves `gitkey` and derives the key path under `~/.ssh/`.
 
@@ -48,7 +48,6 @@ if [ -f "$HOME/.ssh/agent.env" ]; then
     . "$HOME/.ssh/agent.env" > /dev/null  
 fi  
 ```
-  
 
 ## 2. Python Example: Programmatic Retrieval
 
