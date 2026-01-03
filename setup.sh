@@ -160,17 +160,25 @@ if [[ ! -f "$VAULT_FILE" ]]; then
   echo "--> Creating encrypted vault file at ${VAULT_FILE} (48-char GPG passphrase)..."
   [[ -x "$VENV_ANSIBLE_VAULT" ]] || die "ansible-vault not found in venv at: $VENV_ANSIBLE_VAULT"
 
-  GPG_PASSPHRASE="$(openssl rand -base64 36 | tr -d '\n')"
-  tmp_vault="$(mktemp)"
-  chmod 600 "$tmp_vault"
-  printf 'app_gpg_passphrase: "%s"\n' "$GPG_PASSPHRASE" > "$tmp_vault"
+  GPG_PASSPHRASE="$(openssl rand -base64 48 | tr -d '\n')"
 
-  # Install plaintext to the final location with strict permissions, then encrypt in-place.
-  sudo install -m 0600 -o "$ADMIN_USER" -g "$ADMIN_GROUP" "$tmp_vault" "$VAULT_FILE"
-  rm -f "$tmp_vault"
+  # Tighten permissions during file creation (file content is encrypted, but do it anyway).
+  old_umask="$(umask)"
+  umask 077
 
-  run_as_admin "$VENV_ANSIBLE_VAULT" encrypt "$VAULT_FILE" --vault-password-file "$VAULT_PASS_FILE"
+  # IMPORTANT: plaintext YAML never hits disk; it goes straight into ansible-vault via stdin.
+  printf 'app_gpg_passphrase: "%s"\n' "$GPG_PASSPHRASE" \
+    | run_as_admin "$VENV_ANSIBLE_VAULT" encrypt \
+        --vault-password-file "$VAULT_PASS_FILE" \
+        --output "$VAULT_FILE" \
+        /dev/stdin
+
+  umask "$old_umask"
+
+  sudo chown "$ADMIN_USER:$ADMIN_GROUP" "$VAULT_FILE"
   sudo chmod 0640 "$VAULT_FILE"
+
+  unset GPG_PASSPHRASE
 else
   echo "--> Vault file already exists. Skipping."
   sudo chown "$ADMIN_USER:$ADMIN_GROUP" "$VAULT_FILE" || true
