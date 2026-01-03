@@ -2,6 +2,24 @@
 
 Ansible Secrets provides encrypted secrets (e.g., account usernames, account passwords, and other sensitive data) to Bash and Python scripts without exposing those secrets in plaintext.
 
+## Quick Setup (recommended)
+
+Run the setup script from the **repository root**:
+
+```bash
+./setup.sh
+```
+
+The setup script:
+
+- creates/updates the admin toolkit under `/opt/ansible_secrets` (including a Python venv)
+- installs runtime helpers to `/usr/local/bin` and `/usr/local/lib`
+- creates `.ansible_vault_password` and an encrypted `group_vars/all/vault.yml`
+- generates both the **Ansible Vault password** and the **single GPG passphrase** automatically (**48 characters** each)
+- prompts only for your **sudo** password (when required)
+
+If the script adds you to the `appsecretaccess` group, you must **log out and log back in** for the new group membership to take effect.
+
 ## System Components and Directory Structure
 
 Ansible Secrets consists of three security components and relies on a specific directory structure to separate administrative tasks from runtime operations.
@@ -19,6 +37,7 @@ Ansible Secrets consists of three security components and relies on a specific d
 │   │   ├── ansible.cfg
 │   │   ├── deploy_secrets.yml
 │   │   ├── inventory
+│   │   ├── venv/               (Python venv for admin tooling)
 │   │   ├── .ansible_vault_password
 │   │   ├── add-secret.sh         (Admin utility script)
 │   │   ├── files/
@@ -86,3 +105,12 @@ This is what happens whenever an authorized user runs one of your scripts from a
 ### Note on ownership and permissions
 
 Python and bash application scripts are owned by `service_account` and have group membership `appsecretaccess`. This service account has no password set and logins are not permitted. The Linux permissions of such files are `0750`, which means read-write-execute permission for `service_account`, and `read-execute` permission for `appsecretaccess` group members. No other accounts (except for `root`) have access.  
+
+Note: when a user is newly added to `appsecretaccess`, they must start a fresh login session (log out/in) before the new permissions apply.
+
+## Examples
+
+The repository includes an `examples/` directory with practical usage patterns:
+
+- `examples/load_github_identity.sh`: sample application script that retrieves a GitHub SSH key passphrase from Ansible Secrets (e.g., secret name `gitphrase`) and loads the identity into `ssh-agent`.
+- `examples/EXAMPLES.md` (and `examples/EXAMPLES.pdf`): usage patterns for Bash and Python consumers.
