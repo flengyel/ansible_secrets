@@ -22,12 +22,21 @@ This guide will walk through the setup of the Ansible Secrets project, secret en
 
 `setup.sh` is the preferred installation method. It automates Sections 1–3.2 below and installs the runtime helpers system-wide.
 
-### Prerequisites (RHEL)
+### Prerequisites
 
 Install the small set of system prerequisites (if they are not already present):
 
+**RHEL / Fedora:**
+
 ```bash
 sudo dnf install python3 gnupg2 openssl rsync -y
+```
+
+**Debian / Ubuntu:**
+
+```bash
+sudo apt-get update
+sudo apt-get install -y python3 python3-venv python3-pip gnupg openssl rsync
 ```
 
 ### Run the installer
@@ -100,7 +109,7 @@ These steps prepare the server environment with the necessary users, groups, and
 
 ### 1.1. Create Users and Groups
 
-Run these commands on your RHEL server as a user with `sudo` privileges.
+Run these commands on your server as a user with `sudo` privileges.
 
 ```bash
 # Create the dedicated service user
@@ -123,7 +132,13 @@ sudo usermod -aG appsecretaccess flengyel
 ### 1.2. Install Required Software
 
 ```bash
+# RHEL / Fedora
 sudo dnf install python3 gnupg2 openssl rsync -y
+
+# Debian / Ubuntu
+sudo apt-get update
+sudo apt-get install -y python3 python3-venv python3-pip gnupg openssl rsync
+
 # (Optional) ansible-core system package is not required when using setup.sh (it installs ansible-core into the venv)
 ```
 
