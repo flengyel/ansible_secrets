@@ -22,6 +22,9 @@ INVENTORY="${BASE_DIR}/inventory"
 ADD_SECRET_SCRIPT="${BASE_DIR}/add-secret.sh"
 PLAYBOOK_FILE="${BASE_DIR}/deploy_secrets.yml"
 VENV_PATH="${BASE_DIR}/venv/bin/activate"
+VENV_DIR="${BASE_DIR}/venv"
+VENV_PYTHON="${VENV_DIR}/bin/python"
+VENV_PIP="${VENV_DIR}/bin/pip"
 
 # Runtime Paths
 RUNTIME_BIN="/usr/local/bin"
@@ -42,6 +45,7 @@ REPO_TASKS_SRC="./tasks"
 # Security Identities
 SERVICE_USER="service_account"
 SECRET_GROUP="appsecretaccess"
+CURRENT_USER="${SUDO_USER:-$(whoami)}"
 
 echo "--> Initializing Ansible Secrets Administrative Project at ${BASE_DIR}..."
 
@@ -59,9 +63,37 @@ else
     fi
 fi
 
+# Ensure the invoking user is part of the access group for administrative tasks
+if id -u "$CURRENT_USER" > /dev/null 2>&1; then
+    if [[ "$CURRENT_USER" != "$SERVICE_USER" ]]; then
+        if ! id -nG "$CURRENT_USER" | tr ' ' '\n' | grep -qx "$SECRET_GROUP"; then
+            sudo usermod -a -G "$SECRET_GROUP" "$CURRENT_USER"
+        fi
+    fi
+fi
+
 # 1. Create administrative directory structure
 sudo mkdir -p "$FILES_DIR" "$TASKS_DIR" "$VARS_DIR"
 sudo mkdir -p "$RUNTIME_BIN"
+
+# 1b. Ensure Python virtual environment exists for Ansible tooling
+if [[ ! -f "$VENV_PATH" ]]; then
+    echo "--> Creating Python virtual environment at ${VENV_DIR}..."
+    if ! command -v python3 >/dev/null 2>&1; then
+        echo "Error: python3 is required to create the virtual environment." >&2
+        exit 1
+    fi
+    sudo -u "$CURRENT_USER" python3 -m venv "$VENV_DIR"
+fi
+
+# Install required Python packages if missing
+if [[ -x "$VENV_PYTHON" ]]; then
+    if ! sudo -u "$CURRENT_USER" "$VENV_PYTHON" -m pip show ansible-core >/dev/null 2>&1 || ! sudo -u "$CURRENT_USER" "$VENV_PYTHON" -m pip show gnupg >/dev/null 2>&1; then
+        echo "--> Installing Python dependencies (ansible-core, gnupg) into venv..."
+        sudo -u "$CURRENT_USER" "$VENV_PYTHON" -m pip install --upgrade pip
+        sudo -u "$CURRENT_USER" "$VENV_PYTHON" -m pip install ansible-core gnupg
+    fi
+fi
 
 # 2. Create the Ansible Vault password file
 if [[ ! -f "$VAULT_PASS_FILE" ]]; then
