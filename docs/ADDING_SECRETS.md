@@ -107,7 +107,7 @@ try:
     engine, conn = create_db_connection(
         dbhost='mssql.example.com',
         dbport='1433',
-        dbsid='PRODDB',
+        dbsid='DBSID',
         user_secret='mssql_user',
         pswd_secret='mssql_db' # <-- Use the new secret here
     )

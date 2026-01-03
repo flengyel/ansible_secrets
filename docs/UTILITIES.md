@@ -48,11 +48,17 @@ set -euo pipefail
 ANSIBLE_PROJECT_DIR="/opt/ansible_secrets"
 FILES_DIR="${ANSIBLE_PROJECT_DIR}/files"
 VAULT_FILE="${ANSIBLE_PROJECT_DIR}/group_vars/all/vault.yml"
+VAULT_PASS_FILE="${ANSIBLE_PROJECT_DIR}/.ansible_vault_password"
 VENV_PATH="${ANSIBLE_PROJECT_DIR}/venv/bin/activate"
 
 # --- NEW: Define a temporary file and ensure it's cleaned up on exit ---
 TEMP_FILE=$(mktemp /tmp/add-secret.XXXXXX)
-trap 'rm -f "$TEMP_FILE"' EXIT
+
+cleanup() {
+    rm -f "$TEMP_FILE"
+    unset SECRET GPG_PASSPHRASE || true
+}
+trap cleanup EXIT
 
 
 # --- Input Validation ---
@@ -74,6 +80,10 @@ if [[ ! -d "$ANSIBLE_PROJECT_DIR" ]]; then
 fi
 if [[ ! -f "$VAULT_FILE" ]]; then
     echo "Error: Ansible Vault file not found at '$VAULT_FILE'" >&2
+    exit 1
+fi
+if [[ ! -f "$VAULT_PASS_FILE" ]]; then
+    echo "Error: Vault password file not found at '$VAULT_PASS_FILE'" >&2
     exit 1
 fi
 if [[ ! -f "$VENV_PATH" ]]; then
@@ -107,9 +117,11 @@ echo "--> Activating virtual environment..."
 source "$VENV_PATH"
 
 echo "--> Retrieving GPG passphrase securely from Ansible Vault..."
-# This command is specifically crafted to get the passphrase value without
-# any extra quotes or trailing newline characters.
-GPG_PASSPHRASE=$(ansible-vault view "$VAULT_FILE" | grep 'app_gpg_passphrase:' | awk '{printf "%s", $2}' | tr -d \''"')
+# Use the vault password file explicitly to avoid interactive prompts.
+# Extract the value without quotes or newlines.
+GPG_PASSPHRASE=$(
+    ansible-vault view "$VAULT_FILE" --vault-password-file "$VAULT_PASS_FILE"     | awk -F': ' '/^app_gpg_passphrase:/ { gsub(/"/,"",$2); printf "%s",$2 }'
+)
 
 if [[ -z "$GPG_PASSPHRASE" ]]; then
     echo "Error: Failed to retrieve GPG passphrase from vault. Check vault password or file content." >&2
@@ -119,14 +131,13 @@ fi
 echo "--> Encrypting new secret for '${SECRET_NAME}'..."
 # We pipe the secret password directly into GPG's standard input.
 # This avoids creating a temporary plaintext file on disk.
-# --- MODIFIED: The --output now points to the temporary file. ---
-printf '%s' "$SECRET" | gpg --batch --yes --symmetric --cipher-algo AES256 \
-    --passphrase "$GPG_PASSPHRASE" \
-    --output "$TEMP_FILE"
+# IMPORTANT: Do NOT put the passphrase on the command line (visible via `ps`).
+# Provide it via a dedicated file descriptor using loopback pinentry.
+printf '%s' "$SECRET" | gpg --batch --yes --symmetric --cipher-algo AES256     --pinentry-mode loopback     --passphrase-fd 3     --output "$TEMP_FILE"     3< <(printf '%s\n' "$GPG_PASSPHRASE")
 
 # Check if GPG command succeeded.
 if [[ $? -eq 0 ]]; then
-    echo "✅ Success! Encrypted secret created in temporary file."
+    echo "Success! Encrypted secret created in temporary file."
     # --- MODIFIED: Now we use sudo to move the file and set ownership. ---
     echo "--> Moving secret to final destination and setting permissions..."
     sudo mv "$TEMP_FILE" "$OUTPUT_FILE"
@@ -135,14 +146,13 @@ if [[ $? -eq 0 ]]; then
     echo "--> Permissions set to 640 (-rw-r-----)"
     echo "--> Final file at: ${OUTPUT_FILE}"
 else
-    echo "❌ Error: GPG encryption failed." >&2
+    echo "Error: GPG encryption failed." >&2
     exit 1
 fi
 
 # Deactivate the virtual environment
 deactivate
 
-# The 'trap' command will automatically remove the temp file now
 echo "--> Done."
 ```
 

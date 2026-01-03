@@ -391,7 +391,7 @@ sudo chmod 0750 "$GET_SECRET_BASH"
 sudo chown -R "${ADMIN_USER}:${ADMIN_GROUP}" "$BASE_DIR"
 sudo find "$BASE_DIR" -type d -exec chmod 0750 {} +
 
-echo "✅ Initialization complete."
+echo "Initialization complete."
 echo "--------------------------------------------------------"
 echo "Administrative Project: ${BASE_DIR}"
 echo "  - venv:              ${VENV_DIR}"
