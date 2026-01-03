@@ -1,6 +1,6 @@
 # Ansible Secrets
 
-Ansible Secrets provides encrypted secrets (e.g., account usernames, account passwords, and other sensitive data) to Bash and Python scripts without exposing those secrets in plaintext.
+Ansible Secrets provides encrypted secrets (e.g., account usernames, account passwords, API keys, and other sensitive data) to Bash and Python scripts without exposing those secrets in plaintext.
 
 ## Quick Setup (recommended)
 
