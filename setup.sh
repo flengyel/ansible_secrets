@@ -166,12 +166,49 @@ if [[ ! -f "$VAULT_FILE" ]]; then
   old_umask="$(umask)"
   umask 077
 
-  # IMPORTANT: plaintext YAML never hits disk; it goes straight into ansible-vault via stdin.
-  printf 'app_gpg_passphrase: "%s"\n' "$GPG_PASSPHRASE" \
-    | run_as_admin "$VENV_ANSIBLE_VAULT" encrypt \
-        --vault-password-file "$VAULT_PASS_FILE" \
-        --output "$VAULT_FILE" \
-        /dev/stdin
+  # IMPORTANT:
+  #   - do not allow ansible-vault to pick up ansible.cfg from the repo root (it will try to read ./.ansible_vault_password from the repo)
+  #   - do not use /dev/stdin (ansible-vault can resolve stdin to a transient /proc/*/fd/pipe:* path)
+  #
+  # Use a FIFO so plaintext YAML never touches disk, while still giving ansible-vault a stable filesystem path.
+  tmp_dir="$(run_as_admin mktemp -d /tmp/ansible-secrets-vault.XXXXXX)"
+  fifo="${tmp_dir}/vault_plain.yml"
+  empty_cfg="${tmp_dir}/ansible.cfg"
+
+  run_as_admin mkfifo -m 600 "$fifo"
+  run_as_admin sh -c ": > '$empty_cfg'"
+  run_as_admin chmod 600 "$empty_cfg"
+
+  writer_pid=""
+
+  cleanup_vault_tmp() {
+    # If the writer is blocked on the FIFO and we exit early, kill it.
+    if [[ -n "${writer_pid:-}" ]]; then
+      kill "$writer_pid" 2>/dev/null || true
+      wait "$writer_pid" 2>/dev/null || true
+    fi
+    run_as_admin rm -rf "$tmp_dir" 2>/dev/null || true
+  }
+
+  # Ensure we don't leave a blocked background writer on failure.
+  trap cleanup_vault_tmp EXIT
+
+  # Writer: sends plaintext YAML into FIFO (plaintext exists only in RAM/pipe buffers).
+  ( printf 'app_gpg_passphrase: "%s"\n' "$GPG_PASSPHRASE" > "$fifo" ) &
+  writer_pid=$!
+
+  # Reader: encrypt FIFO -> vault.yml, forcing ansible to ignore repo-local config.
+  run_as_admin env ANSIBLE_CONFIG="$empty_cfg" \
+    "$VENV_ANSIBLE_VAULT" encrypt \
+      --vault-password-file "$VAULT_PASS_FILE" \
+      --output "$VAULT_FILE" \
+      "$fifo"
+
+  wait "$writer_pid"
+  writer_pid=""
+
+  cleanup_vault_tmp
+  trap - EXIT
 
   umask "$old_umask"
 
