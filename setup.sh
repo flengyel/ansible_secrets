@@ -43,8 +43,23 @@ SECRET_GROUP="appsecretaccess"
 
 echo "--> Initializing Ansible Secrets Administrative Project at ${BASE_DIR}..."
 
+# Ensure service account and group exist for consistent ownership
+echo "--> Ensuring service account '${SERVICE_USER}' and group '${SECRET_GROUP}' exist..."
+if ! getent group "$SECRET_GROUP" > /dev/null; then
+    sudo groupadd --system "$SECRET_GROUP"
+fi
+
+if ! id -u "$SERVICE_USER" > /dev/null 2>&1; then
+    sudo useradd --system --gid "$SECRET_GROUP" --no-create-home --shell /usr/sbin/nologin "$SERVICE_USER"
+else
+    if ! id -nG "$SERVICE_USER" | tr ' ' '\n' | grep -qx "$SECRET_GROUP"; then
+        sudo usermod -a -G "$SECRET_GROUP" "$SERVICE_USER"
+    fi
+fi
+
 # 1. Create administrative directory structure
 sudo mkdir -p "$FILES_DIR" "$TASKS_DIR" "$VARS_DIR"
+sudo mkdir -p "$RUNTIME_BIN"
 
 # 2. Create the Ansible Vault password file
 if [[ ! -f "$VAULT_PASS_FILE" ]]; then
@@ -97,7 +112,7 @@ fi
 
 if [[ -d "$REPO_TASKS_SRC" ]]; then
     echo "--> Copying tasks from repository..."
-    sudo cp -r "$REPO_TASKS_SRC/"* "$TASKS_DIR/"
+    sudo rsync -a --delete "$REPO_TASKS_SRC/" "$TASKS_DIR/"
 fi
 
 # 6. Create/Deploy add-secret.sh
@@ -133,7 +148,7 @@ sudo mkdir -p "$RUNTIME_LIB"
 
 if [[ -f "$REPO_GET_SECRET_SRC" ]]; then
     echo "--> Copying get_secret.sh from repository..."
-    sudo cp "$REPO_GET_SECRET_SRC" "$GET_SECRET_BASH"
+    sudo install -m 0750 "$REPO_GET_SECRET_SRC" "$GET_SECRET_BASH"
 else
     echo "--> Creating get_secret.sh fallback..."
     sudo tee "$GET_SECRET_BASH" > /dev/null <<'EOF'
@@ -150,7 +165,7 @@ fi
 
 if [[ -d "$REPO_LIB_SRC" ]]; then
     echo "--> Copying Python helpers from repository directory..."
-    sudo cp "$REPO_LIB_SRC"/*.py "$RUNTIME_LIB/"
+    sudo rsync -a --delete "$REPO_LIB_SRC/" "$RUNTIME_LIB/"
 else
     echo "--> Error: Python helper source directory '${REPO_LIB_SRC}' not found." >&2
     exit 1
@@ -161,7 +176,6 @@ sudo chown -R "${SERVICE_USER}:${SECRET_GROUP}" "$RUNTIME_LIB"
 sudo chmod 0750 "$RUNTIME_LIB"
 sudo chmod 0640 "${RUNTIME_LIB}/"*
 sudo chown "${SERVICE_USER}:${SECRET_GROUP}" "$GET_SECRET_BASH"
-sudo chmod 0750 "$GET_SECRET_BASH"
 
 # 8. Finalize Administrative Ownership
 sudo chown -R "$(whoami):$(id -gn)" "$BASE_DIR"
@@ -172,4 +186,3 @@ echo "Administrative Project: ${BASE_DIR}"
 echo "Bash Helper:            ${GET_SECRET_BASH}"
 echo "Python Helpers:         ${RUNTIME_LIB}/"
 echo "--------------------------------------------------------"
-
