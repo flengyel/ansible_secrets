@@ -11,7 +11,6 @@ set -euo pipefail
 
 # --- Configuration ---
 HELPER_SCRIPT="/usr/local/bin/get_secret.sh"
-SSH_KEY_PATH="${HOME}/.ssh/id_ed25519_github"
 AGENT_ENV="${HOME}/.ssh/agent.env"
 
 # --- Functions ---
@@ -21,6 +20,8 @@ cleanup() {
         rm -f "$SSH_ASKPASS_SCRIPT"
     fi
     unset GIT_PASSPHRASE
+    unset GIT_KEYFILE
+    unset SSH_KEY_PATH # derived from GIT_KEYFILE
 }
 
 trap cleanup EXIT HUP INT QUIT TERM
@@ -47,6 +48,17 @@ if [[ -z "${SSH_AUTH_SOCK:-}" ]] || ! ssh-add -l >/dev/null 2>&1; then
     source "$AGENT_ENV" > /dev/null
 fi
 
+# --- Retrieval ---
+
+GIT_KEYFILE=$("$HELPER_SCRIPT" gitkey)
+
+if [[ -z "$GIT_KEYFILE" ]]; then
+    echo "[ERROR] Failed to retrieve GitHub SSH key file." >&2
+    exit 1
+fi
+
+SSH_KEY_PATH="${HOME}/.ssh/${GIT_KEYFILE}"
+
 # 3. Check if the specific identity is already loaded
 if [[ -f "$SSH_KEY_PATH" ]]; then
     FINGERPRINT=$(ssh-keygen -lf "$SSH_KEY_PATH" | awk '{print $2}')
@@ -56,7 +68,6 @@ if [[ -f "$SSH_KEY_PATH" ]]; then
     fi
 fi
 
-# --- Retrieval ---
 
 # If we reached here, the key is not in the agent.
 GIT_PASSPHRASE=$("$HELPER_SCRIPT" gitphrase)
