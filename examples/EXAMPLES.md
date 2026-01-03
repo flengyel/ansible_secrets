@@ -9,7 +9,7 @@ Application scripts operate independently of the Ansible Deployment Project (/op
 |   |   |   |
 |---|---|---|
 |Component|Location|Purpose|
-|Bash Helper|`/usr/local/bin/get_secret.sh|Decrypts` a specific secret to `stdout`.|
+|Bash Helper|`/usr/local/bin/get_secret.sh`|Decrypts a specific secret to `stdout`.|
 |Python Library|`/usr/local/lib/ansible_secret_helpers`|Provides programmatic secret retrieval.|
 |Credential Store|`/opt/credential_store`|Contains GPG-encrypted secrets and the master passphrase.|
 
@@ -17,7 +17,15 @@ Application scripts operate independently of the Ansible Deployment Project (/op
 
 The load_github_identity.sh script is a reference implementation for non-interactively loading an SSH key into the ssh-agent.
 
+This example uses **two secrets**:
+
+- `gitkey`: the **SSH key filename** under `~/.ssh/` (e.g., `id_ed25519_github`). The script derives `SSH_KEY_PATH="$HOME/.ssh/$gitkey"`.
+- `gitphrase`: the **SSH key passphrase** used by `ssh-add`.
+
+
 ### Key Features
+
+- Secret-derived key selection: Retrieves `gitkey` and derives the key path under `~/.ssh/`.
 
 - Idempotency: Checks if the identity is already loaded before attempting decryption.
     
@@ -54,7 +62,7 @@ from ansible_secret_helpers.secret_retriever import get_secret
   
 def main():  
     try:  
-        # Retrieve secret 'gitphrase' (matches gitphrase_pswd.txt.gpg)  
+        # Retrieve secret 'gitphrase' (matches gitphrase_secret.txt.gpg)  
         git_pass = get_secret("gitphrase")  
          
         # Application logic here...  
@@ -86,6 +94,15 @@ To maintain the integrity of the Ansible Secrets system, all application scripts
     
 4. Permissions: Production scripts should be owned by `service_account:appsecretaccess` with mode `0750`.
     
+
+## Deployment note for this example
+
+For this example, ensure your `deploy_secrets.yml` deploys:
+
+- `gitkey_secret.txt.gpg`
+- `gitphrase_secret.txt.gpg`
+
+These must appear in `encrypted_secret_files`, and the files must exist under `/opt/ansible_secrets/files/` before running the playbook.
 
 ## Troubleshooting
 
