@@ -132,7 +132,7 @@ VAULT_FILE="${BASE_DIR}/group_vars/all/vault.yml"
 VENV_PATH="${BASE_DIR}/venv/bin/activate"
 if [[ $# -ne 1 ]]; then echo "Usage: $0 <secret_name>" >&2; exit 1; fi
 SECRET_NAME="$1"
-OUTPUT_FILE="${FILES_DIR}/${SECRET_NAME}_pswd.txt.gpg"
+OUTPUT_FILE="${FILES_DIR}/${SECRET_NAME}_secret.txt.gpg"
 read -sp "Enter password for '${SECRET_NAME}': " SECRET_PASSWORD
 echo
 if [[ -f "$VENV_PATH" ]]; then source "$VENV_PATH"; fi
@@ -159,9 +159,8 @@ set -euo pipefail
 CREDENTIAL_STORE="/opt/credential_store"
 PASSPHRASE_FILE="${CREDENTIAL_STORE}/.gpg_passphrase"
 if [[ $# -ne 1 ]]; then echo "Usage: get_secret <secret_name>" >&2; exit 1; fi
-SECRET_FILE="${CREDENTIAL_STORE}/${1}_pswd.txt.gpg"
-GPG_PASSPHRASE=$(cat "$PASSPHRASE_FILE")
-gpg --batch --quiet --decrypt --passphrase "$GPG_PASSPHRASE" "$SECRET_FILE"
+SECRET_FILE="${CREDENTIAL_STORE}/${1}_secret.txt.gpg"
+gpg --batch --quiet --yes --passphrase-file "$PASSPHRASE_FILE" --decrypt "$SECRET_FILE"
 EOF
     sudo chmod 0750 "$GET_SECRET_BASH"
 fi
