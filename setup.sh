@@ -1,4 +1,4 @@
-#!/bin/bash 
+#!/bin/bash
 #
 # setup.sh - Initializes the Ansible Secrets administrative environment
 # and runtime helper components.
@@ -27,10 +27,12 @@ VENV_PATH="${BASE_DIR}/venv/bin/activate"
 RUNTIME_BIN="/usr/local/bin"
 RUNTIME_LIB="/usr/local/lib/ansible_secret_helpers"
 GET_SECRET_BASH="${RUNTIME_BIN}/get_secret.sh"
+SECURE_APP_BASH="${RUNTIME_BIN}/secure-app.sh"
 
 # Local Repository Source Paths
 REPO_LIB_SRC="./ansible_secret_helpers"
 REPO_GET_SECRET_SRC="./get_secret.sh"
+REPO_SECURE_APP_SRC="./secure-app.sh"
 REPO_ADD_SECRET_SRC="./add-secret.sh"
 REPO_INVENTORY_SRC="./inventory"
 REPO_ANSIBLE_CFG_SRC="./ansible.cfg"
@@ -43,26 +45,28 @@ SECRET_GROUP="appsecretaccess"
 
 echo "--> Initializing Ansible Secrets Administrative Project at ${BASE_DIR}..."
 
-# 0. Create the dedicated service user
-sudo useradd --system --shell /sbin/nologin --comment "Service account for Bash and Python apps" "$SERVICE_USER"
+# Ensure service account and group exist for consistent ownership
+echo "--> Ensuring service account '${SERVICE_USER}' and group '${SECRET_GROUP}' exist..."
+if ! getent group "$SECRET_GROUP" > /dev/null; then
+    sudo groupadd --system "$SECRET_GROUP"
+fi
 
-# Create the dedicated access group
-sudo groupadd --system "$SECRET_GROUP"
-
-# Add the service user to the access group
-sudo usermod -aG "$SECRET_GROUP" "$SERVICE_USER" 
-
-# Add yourself and any other required users to the access group
-sudo usermod -aG appsecretaccess "$USER"
-
+if ! id -u "$SERVICE_USER" > /dev/null 2>&1; then
+    sudo useradd --system --gid "$SECRET_GROUP" --no-create-home --shell /usr/sbin/nologin "$SERVICE_USER"
+else
+    if ! id -nG "$SERVICE_USER" | tr ' ' '\n' | grep -qx "$SECRET_GROUP"; then
+        sudo usermod -a -G "$SECRET_GROUP" "$SERVICE_USER"
+    fi
+fi
 
 # 1. Create administrative directory structure
 sudo mkdir -p "$FILES_DIR" "$TASKS_DIR" "$VARS_DIR"
+sudo mkdir -p "$RUNTIME_BIN"
 
 # 2. Create the Ansible Vault password file
 if [[ ! -f "$VAULT_PASS_FILE" ]]; then
     echo "--> Creating vault password file..."
-    openssl rand -base64 48 | sudo tee "$VAULT_PASS_FILE" > /dev/null
+    openssl rand -base64 24 | sudo tee "$VAULT_PASS_FILE" > /dev/null
     sudo chmod 600 "$VAULT_PASS_FILE"
 else
     echo "--> Vault password file already exists. Skipping."
@@ -110,13 +114,13 @@ fi
 
 if [[ -d "$REPO_TASKS_SRC" ]]; then
     echo "--> Copying tasks from repository..."
-    sudo cp -r "$REPO_TASKS_SRC/"* "$TASKS_DIR/"
+    sudo rsync -a --delete "$REPO_TASKS_SRC/" "$TASKS_DIR/"
 fi
 
 # 6. Create/Deploy add-secret.sh
 if [[ -f "$REPO_ADD_SECRET_SRC" ]]; then
     echo "--> Copying add-secret.sh from repository..."
-    sudo cp "$REPO_ADD_SECRET_SRC" "$ADD_SECRET_SCRIPT"
+    sudo install -m 0750 "$REPO_ADD_SECRET_SRC" "$ADD_SECRET_SCRIPT"
 else
     echo "--> Creating add-secret.sh..."
     sudo tee "$ADD_SECRET_SCRIPT" > /dev/null <<'EOF'
@@ -128,7 +132,7 @@ VAULT_FILE="${BASE_DIR}/group_vars/all/vault.yml"
 VENV_PATH="${BASE_DIR}/venv/bin/activate"
 if [[ $# -ne 1 ]]; then echo "Usage: $0 <secret_name>" >&2; exit 1; fi
 SECRET_NAME="$1"
-OUTPUT_FILE="${FILES_DIR}/${SECRET_NAME}_pswd.txt.gpg"
+OUTPUT_FILE="${FILES_DIR}/${SECRET_NAME}_secret.txt.gpg"
 read -sp "Enter password for '${SECRET_NAME}': " SECRET_PASSWORD
 echo
 if [[ -f "$VENV_PATH" ]]; then source "$VENV_PATH"; fi
@@ -146,7 +150,7 @@ sudo mkdir -p "$RUNTIME_LIB"
 
 if [[ -f "$REPO_GET_SECRET_SRC" ]]; then
     echo "--> Copying get_secret.sh from repository..."
-    sudo cp "$REPO_GET_SECRET_SRC" "$GET_SECRET_BASH"
+    sudo install -m 0750 "$REPO_GET_SECRET_SRC" "$GET_SECRET_BASH"
 else
     echo "--> Creating get_secret.sh fallback..."
     sudo tee "$GET_SECRET_BASH" > /dev/null <<'EOF'
@@ -155,15 +159,20 @@ set -euo pipefail
 CREDENTIAL_STORE="/opt/credential_store"
 PASSPHRASE_FILE="${CREDENTIAL_STORE}/.gpg_passphrase"
 if [[ $# -ne 1 ]]; then echo "Usage: get_secret <secret_name>" >&2; exit 1; fi
-SECRET_FILE="${CREDENTIAL_STORE}/${1}_pswd.txt.gpg"
-GPG_PASSPHRASE=$(cat "$PASSPHRASE_FILE")
-gpg --batch --quiet --decrypt --passphrase "$GPG_PASSPHRASE" "$SECRET_FILE"
+SECRET_FILE="${CREDENTIAL_STORE}/${1}_secret.txt.gpg"
+gpg --batch --quiet --yes --passphrase-file "$PASSPHRASE_FILE" --decrypt "$SECRET_FILE"
 EOF
+    sudo chmod 0750 "$GET_SECRET_BASH"
+fi
+
+if [[ -f "$REPO_SECURE_APP_SRC" ]]; then
+    echo "--> Copying secure-app.sh from repository..."
+    sudo install -m 0755 "$REPO_SECURE_APP_SRC" "$SECURE_APP_BASH"
 fi
 
 if [[ -d "$REPO_LIB_SRC" ]]; then
     echo "--> Copying Python helpers from repository directory..."
-    sudo cp "$REPO_LIB_SRC"/*.py "$RUNTIME_LIB/"
+    sudo rsync -a --delete "$REPO_LIB_SRC/" "$RUNTIME_LIB/"
 else
     echo "--> Error: Python helper source directory '${REPO_LIB_SRC}' not found." >&2
     exit 1
@@ -172,9 +181,10 @@ fi
 # Set Runtime Permissions
 sudo chown -R "${SERVICE_USER}:${SECRET_GROUP}" "$RUNTIME_LIB"
 sudo chmod 0750 "$RUNTIME_LIB"
-sudo chmod 0640 "${RUNTIME_LIB}/"*
+if compgen -G "${RUNTIME_LIB}/*" > /dev/null; then
+    sudo chmod 0640 "${RUNTIME_LIB}/"*
+fi
 sudo chown "${SERVICE_USER}:${SECRET_GROUP}" "$GET_SECRET_BASH"
-sudo chmod 0750 "$GET_SECRET_BASH"
 
 # 8. Finalize Administrative Ownership
 sudo chown -R "$(whoami):$(id -gn)" "$BASE_DIR"
@@ -185,4 +195,3 @@ echo "Administrative Project: ${BASE_DIR}"
 echo "Bash Helper:            ${GET_SECRET_BASH}"
 echo "Python Helpers:         ${RUNTIME_LIB}/"
 echo "--------------------------------------------------------"
-
