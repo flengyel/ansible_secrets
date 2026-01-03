@@ -79,15 +79,19 @@ sudo mkdir -p "$RUNTIME_BIN"
 # 1b. Ensure Python virtual environment exists for Ansible tooling
 if [[ ! -f "$VENV_PATH" ]]; then
     echo "--> Creating Python virtual environment at ${VENV_DIR}..."
-    sudo python3 -m venv "$VENV_DIR"
+    if ! command -v python3 >/dev/null 2>&1; then
+        echo "Error: python3 is required to create the virtual environment." >&2
+        exit 1
+    fi
+    sudo -u "$CURRENT_USER" python3 -m venv "$VENV_DIR"
 fi
 
 # Install required Python packages if missing
 if [[ -x "$VENV_PYTHON" ]]; then
-    if ! "$VENV_PYTHON" -m pip show ansible-core >/dev/null 2>&1 || ! "$VENV_PYTHON" -m pip show gnupg >/dev/null 2>&1; then
+    if ! sudo -u "$CURRENT_USER" "$VENV_PYTHON" -m pip show ansible-core >/dev/null 2>&1 || ! sudo -u "$CURRENT_USER" "$VENV_PYTHON" -m pip show gnupg >/dev/null 2>&1; then
         echo "--> Installing Python dependencies (ansible-core, gnupg) into venv..."
-        sudo "$VENV_PYTHON" -m pip install --upgrade pip
-        sudo "$VENV_PYTHON" -m pip install ansible-core gnupg
+        sudo -u "$CURRENT_USER" "$VENV_PYTHON" -m pip install --upgrade pip
+        sudo -u "$CURRENT_USER" "$VENV_PYTHON" -m pip install ansible-core gnupg
     fi
 fi
 
