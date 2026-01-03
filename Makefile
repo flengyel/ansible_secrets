@@ -12,7 +12,9 @@ EXAMPLES_DIR := examples
 # -V mainfont="DejaVu Sans": Specifies the main font for the document body.
 # -V geometry:margin=0.75in: Sets the page margins to 0.75 inches, giving more
 #   horizontal space to prevent ugly wrapping in code blocks.
-PANDOC := pandoc --pdf-engine=xelatex --highlight-style=tango -V mainfont="DejaVu Sans" -V monofont="DejaVu Sans Mono" -V geometry:margin=0.75in
+PANDOC_HEADER := $(DOC_DIR)/pandoc_header.tex
+PANDOC := pandoc --pdf-engine=xelatex --highlight-style=tango -V mainfont="DejaVu Sans" -V monofont="DejaVu Sans Mono" -V geometry:margin=0.75in -H $(PANDOC_HEADER)
+
 
 # --- File Definitions ---
 # Find all .md files in the docs directory.

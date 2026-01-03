@@ -1,0 +1,16 @@
+% Make inline code (\texttt{...}) breakable in PDF output (tables especially).
+
+% Prefer xurl if available (better line breaking), otherwise fall back to url.
+\IfFileExists{xurl.sty}{\usepackage{xurl}}{\usepackage{url}}
+
+% Ensure url-style text uses monospace.
+\urlstyle{tt}
+
+% Add extra breakpoints (underscore is the big one for your paths).
+\makeatletter
+\g@addto@macro\UrlBreaks{\do\/\do\_\do\-\do\.}
+\makeatother
+
+% Pandoc uses \texttt for inline code spans. Make it breakable.
+\DeclareRobustCommand{\texttt}[1]{\nolinkurl{#1}}
+
