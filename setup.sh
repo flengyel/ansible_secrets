@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash 
 #
 # setup.sh - Initializes the Ansible Secrets administrative environment
 # and runtime helper components.
@@ -43,13 +43,26 @@ SECRET_GROUP="appsecretaccess"
 
 echo "--> Initializing Ansible Secrets Administrative Project at ${BASE_DIR}..."
 
+# 0. Create the dedicated service user
+sudo useradd --system --shell /sbin/nologin --comment "Service account for Bash and Python apps" "$SERVICE_USER"
+
+# Create the dedicated access group
+sudo groupadd --system "$SECRET_GROUP"
+
+# Add the service user to the access group
+sudo usermod -aG "$SECRET_GROUP" "$SERVICE_USER" 
+
+# Add yourself and any other required users to the access group
+sudo usermod -aG appsecretaccess "$USER"
+
+
 # 1. Create administrative directory structure
 sudo mkdir -p "$FILES_DIR" "$TASKS_DIR" "$VARS_DIR"
 
 # 2. Create the Ansible Vault password file
 if [[ ! -f "$VAULT_PASS_FILE" ]]; then
     echo "--> Creating vault password file..."
-    openssl rand -base64 24 | sudo tee "$VAULT_PASS_FILE" > /dev/null
+    openssl rand -base64 48 | sudo tee "$VAULT_PASS_FILE" > /dev/null
     sudo chmod 600 "$VAULT_PASS_FILE"
 else
     echo "--> Vault password file already exists. Skipping."
