@@ -120,9 +120,9 @@ finally:
 Once your script has been modified and tested, use the `secure-app.sh` utility to apply the standard production ownership and permissions. This script ensures the file is owned by `service_account:appsecretaccess` and has `0750` permissions.
 
 ```bash
-# This is an example for a script named 'getemplid.sh'
+# This is an example for a script named 'getNetID.sh'
 # Replace with the path to your actual application script.
-sudo /usr/local/bin/secure-app.sh /path/to/your/getemplid.sh
+sudo /usr/local/bin/secure-app.sh /path/to/your/getNetID.sh
 ```
 
 This command must be run by an administrator with `sudo` privileges.
@@ -162,15 +162,15 @@ This entry only specifies the schedule and the single command to run. All enviro
 
 This example shows how to convert a Bash script that performs a simple LDAP query into a Python script that uses the high-level `create_ldap_connection()` helper.
 
-#### Before: Bash Script (`getemplid.sh`)
+#### Before: Bash Script (`getNetID.sh`)
 
 This script securely retrieves credentials and uses the command-line tool `ldapsearch` to find a user's EMPLID.
 
 ```bash
 #!/bin/bash
 #
-# Resolves a CUNY Login ID to an EMPLID by querying the LDAP directory.
-# Accepts either a CUNY Login ID or an 8-digit EMPLID as input.
+# Resolves a Login ID to an NetID by querying the LDAP directory.
+# Accepts either a Login ID or an 10-digit NetID as input.
 
 set -euo pipefail
 
@@ -199,32 +199,32 @@ fi
 
 
 # --- Main Logic ---
-OUD="ldaps://oud.example.com:636"
+MY_LDAP="ldaps://ldap.example.com:636"
 BASEDN="CN=users,dc=example,dc=com"
 CACERT="/etc/pki/tls/example.com.pem"
 
-# Check if the first argument looks like an 8-digit EMPLID.
+# Check if the first argument looks like an 10-digit EMPLID.
 # If it does, just print it back out.
-if [[ "$1" =~ ^[0-9]{8}$ ]]; then
+if [[ "$1" =~ ^[0-9]{10}$ ]]; then
     echo "$1"
     exit 0
 fi
 
-# If it's not an EMPLID, assume it's a login ID and query LDAP.
+# If it's not an NetID, assume it's a login ID and query LDAP.
 LOGIN_ID="$1"
 
 # The ldapsearch command now uses safely quoted variables.
 EMPLID_RESULT=$(LDAPTLS_CACERT=$CACERT \
-    ldapsearch -LLL -x -H "$OUD" -D "$ADMIN" -w "$PSWD" -b "$BASEDN" -s sub "(uid=$LOGIN_ID)" cunyEduEmplID | \
-    grep 'exampleComEmplID:' | \
-    sed 's/exampleComEmplID: //')
+    ldapsearch -LLL -x -H "$MY_LDAP" -D "$ADMIN" -w "$PSWD" -b "$BASEDN" -s sub "(uid=$LOGIN_ID)" NetID | \
+    grep 'NetID:' | \
+    sed 's/NetID: //')
 
 # The 'unset' commands are now handled by the 'trap' and are not needed here.
 
 echo "$EMPLID_RESULT"
 ```
 
-#### After: Python Script (`get_emplid.py`)
+#### After: Python Script (`get_NetID.py`)
 
 This Python version accomplishes the same task but uses the `connection_helpers` module. It handles argument parsing with the `argparse` library and uses the `ldap3` library for the search.
 
@@ -251,13 +251,13 @@ except ImportError:
 def main():
     """Main execution function"""
     parser = argparse.ArgumentParser(
-        description="Resolves a CUNY Login ID to an EMPLID by querying the LDAP directory."
+        description="Resolves a Login ID to an NetID by querying the LDAP directory."
     )
-    parser.add_argument("identifier", help="A CUNY Login ID or an 8-digit EMPLID.")
+    parser.add_argument("identifier", help="A Login ID or an 10-digit NetID.")
     args = parser.parse_args()
 
-    # If the input is already an 8-digit EMPLID, just print it and exit.
-    if re.fullmatch(r'\d{8}', args.identifier):
+    # If the input is already an 10-digit NetID, just print it and exit.
+    if re.fullmatch(r'\d{10}', args.identifier):
         print(args.identifier)
         sys.exit(0)
 
@@ -273,14 +273,14 @@ def main():
         ldap_conn.search(
             search_base='CN=users,dc=example,dc=com',
             search_filter=f'(uid={login_id})',
-            attributes=['exampleComEmplID']
+            attributes=['NetID']
         )
 
         # Process the response
         if ldap_conn.response:
-            emplid = ldap_conn.response[0]['attributes'].get('exampleComEmplID', [None])[0]
-            if emplid:
-                print(emplid)
+            NetID = ldap_conn.response[0]['attributes'].get('NetID', [None])[0]
+            if NetID:
+                print(NetID)
 
     except Exception as e:
         print(f"An error occurred during the LDAP query: {e}", file=sys.stderr)

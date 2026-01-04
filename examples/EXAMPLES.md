@@ -7,10 +7,11 @@ This directory contains practical examples for consuming secrets within applicat
 Application scripts operate independently of the Ansible Deployment Project (/opt/ansible_secrets). 
 They interact solely with the Runtime Secrets Directory (/opt/credential_store) via system-wide helper scripts.
 
-|  | Bash Helper | Python Library | Credential Store |
-|---|---|---|---|
-| Location | <code>/usr/local/bin/get_secret.sh</code> | <code>/usr/local/lib/</code><br><code>ansible_secret_helpers</code> | <code>/opt/credential_store</code> |
-| Purpose | Decrypts a specific secret to stdout. | Provides programmatic secret retrieval. | Contains GPG-encrypted secrets and the master passphrase. |
+| Component / Location | Purpose |
+|---|---|
+| **Bash Helper**<br>`/usr/local/bin/get_secret.sh` | Decrypts a specific secret to `stdout`. |
+| **Python Library**<br>`/usr/local/lib/`<br>`ansible_secret_helpers` | Provides programmatic secret retrieval. |
+| **Credential Store**<br>`/opt/credential_store` | Contains GPG-encrypted secrets and the master passphrase. |
 
 
 ## 1. Bash Example: GitHub Identity Loader

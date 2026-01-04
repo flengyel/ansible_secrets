@@ -4,7 +4,9 @@ This document shows how to modify a Python script to use the Ansible Secrets sys
 
 ## Example
 
-A Python script, `cunyfirst.py`, runs nightly via `cron` to generate a report from an Oracle database. This script requires a database username and password. The goal is to remove the hardcoded password from the script and retrieve it securely from the credential store.
+A Python script, `nightly.py`, runs nightly via `cron` to generate a report from an Oracle database. 
+This script requires a database username and password. The goal is to remove the hardcoded password 
+from the script and retrieve it securely from the credential store.
 
 The execution flow involves three components:
 
@@ -14,20 +16,23 @@ The execution flow involves three components:
 
 ### 1. The Cron Job Entry
 
-The role of `cron` executes the wrapper script at the scheduled time. All logic for logging and notifications should be handled within the wrapper script. 
+The role of `cron` executes the wrapper script at the scheduled time. 
+All logic for logging and notifications should be handled within the wrapper script. 
 
 Here is the recommended `crontab` entry:
 
 ```bash
-# Run the daily OIM report job at 1:00 AM
-00 1 * * * /ims/cunyfirst/dailyoim_venv.sh
+# Run the nightly report job at 1:00 AM
+00 1 * * * /reports/nightly/nightly_venv.sh
 ```
 
-This entry, owned by the `flengyel` user, executes the wrapper script once per day. The user running the cron job must be a member of the `appsecureaccess` group on the local machine (see `INSTALLATION` for details).  
+This entry, owned by the `hapless` user, executes the wrapper script once per day. 
+The user running the cron job must be a member of the `appsecureaccess` group on the local machine (see `INSTALLATION` for details).  
 
-### 2. The Wrapper Script (`dailyoim_venv.sh`)
+### 2. The Wrapper Script (`_venv.sh`)
 
-A wrapper script is essential when running complex applications from `cron`, which provides a minimal, non-interactive shell environment. The wrapper's job is to prepare the environment before running the main application.
+A wrapper script is essential when running complex applications from `cron`, which provides a minimal, 
+non-interactive shell environment. The wrapper's job is to prepare the environment before running the main application.
 
 The script below performs several actions:
 
@@ -41,13 +46,13 @@ The script below performs several actions:
 ```bash
 #!/usr/bin/env bash
 
-# Wrapper script to set up environment and run the cunyfirst.py report
+# Wrapper script to set up environment and run the nightly.py report
 
 # --- Configuration ---
-LOG_FILE="/var/log/cunyfirst_report.log"
-EMAIL_RECIPIENT="florian.lengyel@cuny.edu"
-EMAIL_SUBJECT="Daily OIM Report"
-APP_DIR="/ims/cunyfirst"
+LOG_FILE="/var/log/nightly_report.log"
+EMAIL_RECIPIENT="hapless.user@example.com"
+EMAIL_SUBJECT="Nightly Report"
+APP_DIR="/reports/nightly"
 
 # --- Main Logic ---
 # Change to the application directory
@@ -67,7 +72,7 @@ export LD_LIBRARY_PATH=/usr/lib/oracle/19.19/client64/lib
 source bin/activate
 
 # Execute the main Python script
-./cunyfirst.py
+./nightly.py
 PY_EXIT_CODE=$?
 
 if [[ $PY_EXIT_CODE -ne 0 ]]; then
@@ -75,18 +80,12 @@ if [[ $PY_EXIT_CODE -ne 0 ]]; then
     echo "ERROR: Python script exited with code $PY_EXIT_CODE."
 fi
 
-# Example of conditional logic from original script
-if [ "19-Feb-25" == "$(date +%d-%b-%y)" ]; then
-    echo "Appending special report..."
-    cat ./johnrayvargas_oim_usr_report.txt >> ./daily_oim_usr_report.txt
-fi
-
 # SFTP transfer logic
 echo "---"
 echo "Starting SFTP transfer..."
-sftp -i /home/flengyel/.ssh/IMS_SvcAcct -oBatchMode=no -b - IMS_SvcAcct@st-edge.cuny.edu << !
-  cd CUNY_IMS
-  put daily_oim_usr_report.txt
+sftp -i /home/hapless/.ssh/sftp_acct -oBatchMode=no -b - sftp_acct@sftp.example.com << !
+  cd TARGET_DIR
+  put nightly.txt
   ls -l
   bye
 !
@@ -101,17 +100,17 @@ cat "$LOG_FILE" | s-nail -s "$EMAIL_SUBJECT" "$EMAIL_RECIPIENT"
 exit 0
 ```
 
-### 3. Securing the Python Script (`cunyfirst.py`)
+### 3. Securing the Python Script (`nightly.py`)
 
 The final step is to modify the Python script to remove the hardcoded password and use the `connection_helpers` module.
 
-#### Original `cunyfirst.py` 
+#### Original `nightly.py` 
 
 ```python
 # ... imports ...
-dbhost = 'IAMPRDDB1.cuny.edu'
+dbhost = 'DB1.example.com'
 dbport = '2483'
-dbsid  = 'PDIMOIG_HUD'
+dbsid  = 'DBSID'
 datasrc = cx.makedsn(dbhost, dbport,service_name = dbsid)
 
 # This line contains the hardcoded secret password
@@ -121,7 +120,7 @@ engine = sqlalchemy.create_engine(constr,  max_identifier_length=128)
 # ... rest of script ...
 ```
 
-#### Revised `cunyfirst.py`
+#### Revised `nightly.py`
 
 This version uses the recommended helper module to securely establish the database connection.
 
@@ -148,11 +147,11 @@ except ImportError:
 
 
 # --- Database Connection Details ---
-dbhost = 'IAMPRDDB1.cuny.edu'
+dbhost = 'DB1.example.com'
 dbport = '2483'
-dbsid  = 'PDIMOIG_HUD'
+dbsid  = 'DBSID'
 # Define the names of the secrets to be used for the connection.
-user_secret = 'cunyfirst_user' # The name of the secret for the username
+user_secret = 'report_username' # The name of the secret for the username
 pswd_secret = 'oracle_db'      # The name of the secret for the password
 
 
@@ -171,7 +170,7 @@ try:
     result = conn.execute(sqlalchemy.text(stmt))
     
     # Use a 'with' block for file handling to ensure it closes automatically
-    with open('daily_oim_usr_report.txt', 'w', newline='') as fh:
+    with open('nightly.txt', 'w', newline='') as fh:
         outcsv = csv.writer(fh, delimiter='\t')
         outcsv.writerows(result)
 
