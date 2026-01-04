@@ -10,10 +10,10 @@ EXAMPLES_DIR := examples
 # --highlight-style=tango: A popular and readable style for syntax highlighting.
 # -V monofont="DejaVu Sans Mono": Specifies a monospaced font for code blocks.
 # -V mainfont="DejaVu Sans": Specifies the main font for the document body.
-# -V geometry:margin=0.75in: Sets the page margins to 0.75 inches, giving more
+# -V geometry:margin=0.5in: Sets the page margins to 0.5 inches, giving more
 #   horizontal space to prevent ugly wrapping in code blocks.
-PANDOC_HEADER := $(DOC_DIR)/pandoc_header.tex
-PANDOC := pandoc --pdf-engine=xelatex --highlight-style=tango -V mainfont="DejaVu Sans" -V monofont="DejaVu Sans Mono" -V geometry:margin=0.75in -H $(PANDOC_HEADER)
+
+PANDOC := pandoc --pdf-engine=xelatex --highlight-style=tango -V mainfont="DejaVu Sans" -V monofont="DejaVu Sans Mono" -V geometry:margin=0.5in 
 
 
 # --- File Definitions ---
